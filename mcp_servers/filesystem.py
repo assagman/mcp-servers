@@ -22,7 +22,7 @@ class MCPServerFilesystem:
 
         self.SERVER_NAME = "MCP_SERVER_FILESYSTEM"
         self.SERVER_HOST = str(os.environ.get("MCP_SERVER_FILESYSTEM_HOST", "0.0.0.0"))
-        self.SERVER_PORT = int(os.environ.get("MCP_SERVER_FILESYSTEM_PORT", 8764))
+        self.SERVER_PORT = int(os.environ.get("MCP_SERVER_FILESYSTEM_PORT", 8765))
 
         self.validate()
         print(f"INFO: {self.SERVER_NAME}")

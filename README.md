@@ -22,8 +22,15 @@ undesired outcomes, so use it at your own risk.
 All LLM models are used from openrouter.ai, so on OPENROUTER_API_KEY
 env var is mandatory for this project to interact with a LLM model.
 
-Set on OPENROUTER_API_KEY: `cp ./examples/.env.example ./examples/.env` then
-set your OPENROUTER_API_KEY in `./examples/.env`. Then execute:
+`cp ./examples/.env.example ./examples/.env` then
+set your OPENROUTER_API_KEY in `./examples/.env`. In these examples
+`google/gemini-2.5-flash-preview` is picked as the LLM model since it's
+the best fit model for this workflow I experienced. You need to buy
+credits on https://openrouter.ai/settings/credits to experiment. Even
+some free alternatives can work sometimes, but either they do not produce consistent
+outputs or there are some problems with thi hosting server like rate limits or unavailability.
+Make sure you select models with `tools usage`. Generally Google and OpenAI models, even
+with smaller/cheaper ones, works well.
 
 ### Example usage: as a package in client code
 

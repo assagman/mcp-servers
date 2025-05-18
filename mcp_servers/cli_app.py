@@ -111,7 +111,7 @@ def check_existing_server(server: str):
             print(f"Error reading PID file: {e}. Removing stale PID file.")
             os.remove(pid_file)
 
-def app():
+def main():
     """Parse arguments and decide whether to run in foreground or daemon mode."""
     parser = argparse.ArgumentParser(
         description="Command line interface for MCP Server",

@@ -13,6 +13,8 @@ load_dotenv()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
+assert os.environ.get("MCP_SERVER_FILESYSTEM_HOST"), "MCP_SERVER_FILESYSTEM_HOST must be defined"
+assert os.environ.get("MCP_SERVER_FILESYSTEM_PORT"), "MCP_SERVER_FILESYSTEM_PORT must be defined"
 
 
 async def main():

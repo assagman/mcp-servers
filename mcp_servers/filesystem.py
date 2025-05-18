@@ -3,19 +3,27 @@ import time
 import typing as t
 import asyncio
 import shutil
+import tempfile
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 from pydantic_ai.mcp import MCPServerHTTP
 
-class MCPServerFilesystem:
-    ALLOWED_DIRECTORY = Path(os.environ.get("MCP_SERVER_FILESYSTEM_ALLOWED_DIR", str(Path.cwd()))).expanduser().resolve()
-    SERVER_NAME = "MCP_SERVER_FILESYSTEM"
-    SERVER_HOST = str(os.environ.get("MCP_SERVER_FILESYSTEM_HOST", "0.0.0.0"))
-    SERVER_PORT = int(os.environ.get("MCP_SERVER_FILESYSTEM_PORT", 8764))
+load_dotenv()
 
+class MCPServerFilesystem:
     def __init__(self):
+        allowed_dir = os.environ.get("MCP_SERVER_FILESYSTEM_ALLOWED_DIR")
+        self.ALLOWED_DIRECTORY = Path(allowed_dir or str(tempfile.mkdtemp())).expanduser().resolve()
+        print(self.ALLOWED_DIRECTORY)
+
+        self.SERVER_NAME = "MCP_SERVER_FILESYSTEM"
+        self.SERVER_HOST = str(os.environ.get("MCP_SERVER_FILESYSTEM_HOST", "0.0.0.0"))
+        self.SERVER_PORT = int(os.environ.get("MCP_SERVER_FILESYSTEM_PORT", 8764))
+
         self.validate()
         print(f"INFO: {self.SERVER_NAME}")
         print(f"INFO: Allowed directory for operations: {self.ALLOWED_DIRECTORY}")

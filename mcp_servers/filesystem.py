@@ -30,13 +30,14 @@ class MCPServerFilesystem:
         print(f"INFO: Server will run on port: {self.SERVER_PORT}")
         self.server = None
         self.serve_task = None
+        self.uvicorn_server = None
 
     def validate(self):
         if not self.ALLOWED_DIRECTORY.is_dir():
             print(f"Warning: ALLOWED_DIRECTORY '{self.ALLOWED_DIRECTORY}' does not exist or is not a directory. Creating it.")
             self.ALLOWED_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
-    async def run(self):
+    async def start(self):
         server = FastMCP(
             name=self.SERVER_NAME,
             port=self.SERVER_PORT
@@ -267,15 +268,30 @@ class MCPServerFilesystem:
                 return f"Error deleting directory '{path}': {e}"
 
         uviconfig = uvicorn.Config(server.sse_app, host=self.SERVER_HOST, port=self.SERVER_PORT, log_level="info")
-        uvicorn_server = uvicorn.Server(uviconfig)
-        self.serve_task = asyncio.create_task(uvicorn_server.serve())
+        self.uvicorn_server = uvicorn.Server(uviconfig)
+        self.serve_task = asyncio.create_task(self.uvicorn_server.serve())
 
         while True:
             await asyncio.sleep(1)
-            if uvicorn_server.started:
+            if self.uvicorn_server.started:
                 break
 
+        return self.serve_task
 
+    async def stop(self): # Optional: for more controlled shutdown
+        if hasattr(self, 'server_instance') and self.uvicorn_server:
+            print(f"INFO: Attempting to shut down {self.SERVER_NAME}...")
+            self.uvicorn_server.should_exit = True
+            # Give it a moment, or await a shutdown completion if available
+            if self.serve_task and not self.serve_task.done():
+                 self.serve_task.cancel()
+                 try:
+                     await self.serve_task
+                 except asyncio.CancelledError:
+                     print(f"INFO: {self.SERVER_NAME} serve task successfully cancelled.")
+                 except Exception as e:
+                     print(f"ERROR: Exception during serve_task cancellation: {e}")
+        print(f"INFO: {self.SERVER_NAME} stop sequence initiated.")
 
     def get_mcp_server_http(self):
         return MCPServerHTTP(url=f'http://{self.SERVER_HOST}:{self.SERVER_PORT}/sse')

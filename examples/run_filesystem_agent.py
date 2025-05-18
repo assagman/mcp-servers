@@ -20,7 +20,7 @@ assert os.environ.get("MCP_SERVER_FILESYSTEM_PORT"), "MCP_SERVER_FILESYSTEM_PORT
 async def main():
     # Instantiate the server
     mcp_server_filesystem = MCPServerFilesystem()
-    await mcp_server_filesystem.run()
+    serve_task = await mcp_server_filesystem.start()
     #
     model = OpenAIModel(
         model_name="google/gemini-2.5-flash-preview",

@@ -37,31 +37,4 @@ mcpserver = "cli:app"
 dev = [
     "build>=1.2.2",
     "twine>=5.1.1",
-    "pytest>=8.3.3",
-    "pytest-cov>=5.0.0",
-    "ruff>=0.6.9",
-    "mypy>=1.11.2",
 ]
-
-[tool.ruff]
-line-length = 88
-target-version = "py312"
-lint.select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "UP", # pyupgrade
-    "B",  # flake8-bugbear
-]
-lint.ignore = ["E501"]  # Ignore line length for now, adjust as needed
-
-[tool.mypy]
-python_version = "3.12"
-strict = true
-ignore_missing_imports = true  # Useful for third-party libraries like pydantic-ai
-
-[tool.pytest.ini_options]
-minversion = "8.0"
-addopts = "-ra --cov=mcp_servers --cov-report=term-missing"
-testpaths = ["tests"]

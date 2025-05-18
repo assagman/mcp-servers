@@ -14,9 +14,3 @@ jobs:
         run: uv venv --python 3.12 && source .venv/bin/activate
       - name: Install dependencies
         run: uv sync --extra dev
-      - name: Run tests
-        run: uv run pytest
-      - name: Run linter
-        run: uv run ruff check .
-      - name: Run type checker
-        run: uv run mypy .

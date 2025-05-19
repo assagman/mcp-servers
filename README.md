@@ -48,9 +48,26 @@ is expected to show this related process.
 
 `python examples/run_filesystem_agent_2.py`
 
-after some experimentation, please run:
+after some chat with agent, please run below to stop the MCP server:
 
 `mcpserver stop --server filesystem`
 
 This specific example uses CLI app utility to start/stop MCP seperately from the client code
 (different from the first example).
+
+### Others
+
+#### brave_search
+
+Create `.env` file in the top-level project directory, set BRAVE_API_KEY in it. Then excecute:
+
+`mcpserver start --server brave_search --port 8766 --detach`
+
+This will start the MCP Server. Let's test it with example agent:
+
+`python examples/run_brave_search_agent.py`
+
+This will allow user to chat with agent, using MCP server for Brave Search. After some chat,
+you can stop it via:
+
+`mcpserver stop --server brave_search`

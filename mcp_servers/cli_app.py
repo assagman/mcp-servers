@@ -10,6 +10,7 @@ import logging
 import signal
 
 from mcp_servers.filesystem import MCPServerFilesystem
+from mcp_servers.brave_search import MCPServerBraveSearch
 
 
 async def start_server(args):
@@ -27,6 +28,21 @@ async def start_server(args):
 
             # Start the filesystem server
             server = MCPServerFilesystem()
+            try:
+                server_task = await server.start()
+                await server_task
+            except KeyboardInterrupt:
+                print("\nServer shutting down...")
+                await server.stop()
+                sys.exit(0)
+        elif args.server == "brave_search":
+            if args.host:
+                os.environ["MCP_SERVER_BRAVE_SEARCH_HOST"] = args.host
+            if args.port:
+                os.environ["MCP_SERVER_BRAVE_SEARCH_PORT"] = str(args.port)
+
+            # Start the brave_search server
+            server = MCPServerBraveSearch()
             try:
                 server_task = await server.start()
                 await server_task
@@ -125,7 +141,10 @@ def main():
     start_parser = subparsers.add_parser("start", help="Start an MCP server")
     start_parser.add_argument(
         "--server",
-        choices=["filesystem"],
+        choices=[
+            "filesystem",
+            "brave_search",
+        ],
         required=True,
         help="Type of server to start"
     )
@@ -153,7 +172,10 @@ def main():
     stop_parser = subparsers.add_parser("stop", help="Stop a running MCP server")
     stop_parser.add_argument(
         "--server",
-        choices=["filesystem"],
+        choices=[
+            "filesystem",
+            "brave_search",
+        ],
         required=True,
         help="Type of server to start"
     )

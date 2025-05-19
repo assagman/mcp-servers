@@ -28,7 +28,7 @@ set your OPENROUTER_API_KEY in `./examples/.env`. In these examples
 the best fit model for this workflow I experienced. You need to buy
 credits on https://openrouter.ai/settings/credits to experiment. Even
 some free alternatives can work sometimes, but either they do not produce consistent
-outputs or there are some problems with thi hosting server like rate limits or unavailability.
+outputs or there are some problems with the hosting server like rate limits or unavailability.
 Make sure you select models with `tools usage`. Generally Google and OpenAI models, even
 with smaller/cheaper ones, works well.
 

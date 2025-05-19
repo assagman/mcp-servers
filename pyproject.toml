@@ -16,7 +16,7 @@ exclude = [
 
 [project]
 name = "mcp_servers"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
     { name = "Sercan Sagman", email = "sercan@sagmans.com" }
 ]

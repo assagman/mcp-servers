@@ -78,8 +78,7 @@ class MCPServerBraveSearch:
             print("Error: BRAVE_API_KEY environment variable is required.", file=sys.stderr)
             sys.exit(1)
 
-        self.SERVER_NAME = "example-servers/brave-search"
-        self.SERVER_VERSION = "0.1.0"
+        self.SERVER_NAME = "MCP_SERVER_BRAVE_SEARCH"
         self.SERVER_HOST = os.getenv("MCP_SERVER_BRAVE_SEARCH_HOST", "0.0.0.0")
         self.SERVER_PORT = int(os.getenv("MCP_SERVER_BRAVE_SEARCH_PORT", 8766)) # Example port
 
@@ -100,7 +99,7 @@ class MCPServerBraveSearch:
         self.uvicorn_server: Optional[uvicorn.Server] = None
         self.serve_task: Optional[asyncio.Task] = None
 
-        print(f"INFO: {self.SERVER_NAME} v{self.SERVER_VERSION}")
+        print(f"INFO: {self.SERVER_NAME}")
         print(f"INFO: Server will run on http://{self.SERVER_HOST}:{self.SERVER_PORT}")
         print(f"INFO: Ensure BRAVE_API_KEY is set in your environment.")
 
@@ -299,8 +298,7 @@ class MCPServerBraveSearch:
 
         self.server = FastMCP(
             name=self.SERVER_NAME,
-            version=self.SERVER_VERSION,
-            port=self.SERVER_PORT # Passed for FastMCP internal use, if any
+            port=self.SERVER_PORT
         )
 
         # --- Tool Definitions ---

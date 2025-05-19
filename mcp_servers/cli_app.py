@@ -9,8 +9,14 @@ import daemon.pidfile
 import logging
 import signal
 
+from dotenv import load_dotenv
+
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave_search import MCPServerBraveSearch
+from mcp_servers.searxng_search import MCPServerSearXNG
+
+
+load_dotenv(Path("~/.mcp_servers/.env").expanduser().resolve())
 
 
 async def start_server(args):

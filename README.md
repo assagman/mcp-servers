@@ -71,3 +71,8 @@ This will allow user to chat with agent, using MCP server for Brave Search. Afte
 you can stop it via:
 
 `mcpserver stop --server brave_search`
+
+## Testing specs
+
+- macOS - arm64
+- python 3.12

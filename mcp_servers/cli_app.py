@@ -2,8 +2,10 @@ import os
 import sys
 import time
 import argparse
-import asyncio
 from pathlib import Path
+import shutil
+import asyncio
+import httpx
 import daemon
 import daemon.pidfile
 import logging
@@ -11,12 +13,55 @@ import signal
 
 from dotenv import load_dotenv
 
+import mcp_servers
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave_search import MCPServerBraveSearch
 from mcp_servers.searxng_search import MCPServerSearXNG
 
+DEFAULT_CONFIG_DIR=Path("~/.mcp_servers").expanduser().resolve()
+DEFAULT_ENV_FILE = DEFAULT_CONFIG_DIR / ".env"
+load_dotenv(DEFAULT_ENV_FILE)
 
-load_dotenv(Path("~/.mcp_servers/.env").expanduser().resolve())
+
+def initialize_config(force: bool):
+    if force:
+        shutil.rmtree(DEFAULT_CONFIG_DIR)
+
+    os.makedirs(DEFAULT_CONFIG_DIR, exist_ok=True)
+
+    if not DEFAULT_ENV_FILE.exists():
+        url = f"https://raw.githubusercontent.com/assagman/mcp_servers/refs/tags/v{mcp_servers.__version__}/.env.example"
+
+        try:
+            with httpx.Client() as client:
+                response = client.get(url)
+            response.raise_for_status()
+            DEFAULT_ENV_FILE.write_text(response.text)
+            print(f"Example environment variable file written to {DEFAULT_ENV_FILE}")
+
+        except httpx.HTTPError as e:
+            print(f"Error fetching the file: {e}")
+        except OSError as e:
+            print(f"Error writing to file: {e}")
+
+    # searxng
+    searxng_config_dir = DEFAULT_CONFIG_DIR / "searxng_config"
+    os.makedirs(searxng_config_dir, exist_ok=True)
+
+    searxng_settings_file = searxng_config_dir / "settings.yml"
+    if not searxng_settings_file.exists():
+        with open(searxng_settings_file, "w") as f:
+            f.write(f"""
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  limiter: false
+            """)
 
 
 async def start_server(args):
@@ -186,6 +231,14 @@ def main():
         help="Type of server to start"
     )
 
+    init_parser = subparsers.add_parser("init", help="Stop a running MCP server")
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=f"Force to overwrite entire {DEFAULT_CONFIG_DIR}",
+    )
+
+
     # Parse the arguments
     args = parser.parse_args()
 
@@ -207,3 +260,5 @@ def main():
             asyncio.run(start_server(args))
     elif args.command == "stop":
         stop_server(args.server)
+    elif args.command == "init":
+        initialize_config(args.force)

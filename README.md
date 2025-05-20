@@ -1,5 +1,5 @@
 # mcp_servers
-A collection of MCP servers
+A collection of MCP servers and a CLI tool to manage them.
 
 ## Disclaimer
 

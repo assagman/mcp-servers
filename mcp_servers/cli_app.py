@@ -101,6 +101,21 @@ async def start_server(args):
                 print("\nServer shutting down...")
                 await server.stop()
                 sys.exit(0)
+        elif args.server == "searxng_search":
+            if args.host:
+                os.environ["MCP_SERVER_SEARXNG_SEARCH_HOST"] = args.host
+            if args.port:
+                os.environ["MCP_SERVER_SEARXNG_SEARCH_PORT"] = str(args.port)
+
+            # Start the brave_search server
+            server = MCPServerSearXNG()
+            try:
+                server_task = await server.start()
+                await server_task
+            except KeyboardInterrupt:
+                print("\nServer shutting down...")
+                await server.stop()
+                sys.exit(0)
         else:
             raise ValueError(f"Unknown server type: {args.server}")
 
@@ -195,6 +210,7 @@ def main():
         choices=[
             "filesystem",
             "brave_search",
+            "searxng_search",
         ],
         required=True,
         help="Type of server to start"
@@ -226,6 +242,7 @@ def main():
         choices=[
             "filesystem",
             "brave_search",
+            "searxng_search",
         ],
         required=True,
         help="Type of server to start"

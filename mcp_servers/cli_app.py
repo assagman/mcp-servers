@@ -91,6 +91,10 @@ search:
   formats:
     - html
     - json
+
+engines:
+  - name: startpage
+    disabled: true
             """)
     else:
         print("Skipped init for searxng")

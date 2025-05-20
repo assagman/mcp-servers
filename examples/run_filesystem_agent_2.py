@@ -7,8 +7,9 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
 from pydantic_ai.mcp import MCPServerHTTP
 
+from mcp_servers import load_env
 
-load_dotenv()
+load_env()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"

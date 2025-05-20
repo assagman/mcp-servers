@@ -19,12 +19,15 @@ import mcp_servers
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave_search import MCPServerBraveSearch
 from mcp_servers.searxng_search import MCPServerSearXNG
+from mcp_servers import (
+    DEFAULT_CONFIG_DIR,
+    DEFAULT_ENV_FILE,
+    DEFAULT_SEARXNG_CONFIG_DIR,
+    DEFAULT_SEARXNG_SETTINGS_FILE,
+    load_env
+)
 
-DEFAULT_CONFIG_DIR=Path("~/.mcp_servers").expanduser().resolve()
-DEFAULT_ENV_FILE = DEFAULT_CONFIG_DIR / ".env"
-DEFAULT_SEARXNG_CONFIG_DIR = DEFAULT_CONFIG_DIR / "searxng_config"
-DEFAULT_SEARXNG_SETTINGS_FILE = DEFAULT_SEARXNG_CONFIG_DIR / "settings.yml"
-load_dotenv(DEFAULT_ENV_FILE)
+load_env()
 
 
 def initialize_config(subcommand: str, force: bool):
@@ -204,6 +207,8 @@ async def start_server(args):
                 await server.stop()
                 sys.exit(0)
         elif args.server == "brave_search":
+            assert os.getenv("BRAVE_API_KEY"), "BRAVE_API_KEY must be set"
+
             if args.host:
                 os.environ["MCP_SERVER_BRAVE_SEARCH_HOST"] = args.host
             if args.port:
@@ -219,6 +224,8 @@ async def start_server(args):
                 await server.stop()
                 sys.exit(0)
         elif args.server == "searxng_search":
+            assert os.getenv("SEARXNG_BASE_URL"), "SEARXNG_BASE_URL must be set"
+
             if args.host:
                 os.environ["MCP_SERVER_SEARXNG_SEARCH_HOST"] = args.host
             if args.port:

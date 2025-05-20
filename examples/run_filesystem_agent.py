@@ -7,9 +7,10 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
 
 from mcp_servers.filesystem import MCPServerFilesystem
+from mcp_servers import load_env
 
+load_env()
 
-load_dotenv()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
@@ -18,7 +19,7 @@ assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined
 async def main():
     # Instantiate the server
     mcp_server_filesystem = MCPServerFilesystem()
-    serve_task = await mcp_server_filesystem.start()
+    _ = await mcp_server_filesystem.start()
     #
     model = OpenAIModel(
         model_name="google/gemini-2.5-flash-preview",

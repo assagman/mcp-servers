@@ -11,14 +11,12 @@ import builtins # Import builtins for robust access to str, type, etc.
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, HttpUrl, Field
-
 from mcp.server.fastmcp import FastMCP
 
+from mcp_servers import load_env
 
-# Load environment variables from .env file if present
-load_dotenv()
+load_env()
 
-# --- Pydantic Models for SearxNG API Responses ---
 
 class SearXNGResult(BaseModel):
     url: HttpUrl

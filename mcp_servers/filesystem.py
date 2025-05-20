@@ -6,13 +6,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 from pydantic_ai.mcp import MCPServerHTTP
 
-load_dotenv()
+from mcp_servers import load_env
+
+load_env()
+
 
 class MCPServerFilesystem:
     def __init__(self):

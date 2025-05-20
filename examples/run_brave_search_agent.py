@@ -8,19 +8,21 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
 from pydantic_ai.mcp import MCPServerHTTP
 
+from mcp_servers import load_env
 
-load_dotenv(Path("~/.mcp_servers/.env").expanduser().resolve())
+load_env()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
-if not os.environ.get("MCP_SERVER_FILESYSTEM_HOST"):
-    os.environ['MCP_SERVER_FILESYSTEM_HOST'] = "0.0.0.0"
-if not os.environ.get("MCP_SERVER_FILESYSTEM_PORT"):
-    os.environ['MCP_SERVER_FILESYSTEM_PORT'] = "8766"
+
+if not os.environ.get("MCP_SERVER_BRAVE_SEARCH_HOST"):
+    os.environ['MCP_SERVER_BRAVE_SEARCH_HOST'] = "0.0.0.0"
+if not os.environ.get("MCP_SERVER_BRAVE_SEARCH_PORT"):
+    os.environ['MCP_SERVER_BRAVE_SEARCH_PORT'] = "8766"
 
 async def main():
     # Instantiate the server
-    mcp_server_filesystem = MCPServerHTTP(f"http://{os.environ['MCP_SERVER_FILESYSTEM_HOST']}:{os.environ['MCP_SERVER_FILESYSTEM_PORT']}/sse")
+    mcp_server_filesystem = MCPServerHTTP(f"http://{os.environ['MCP_SERVER_BRAVE_SEARCH_HOST']}:{os.environ['MCP_SERVER_BRAVE_SEARCH_PORT']}/sse")
     #
     model = OpenAIModel(
         model_name="google/gemini-2.5-flash-preview",

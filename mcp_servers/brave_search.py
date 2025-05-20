@@ -10,14 +10,12 @@ from typing import List, Optional, Dict
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, HttpUrl, Field
-
 from mcp.server.fastmcp import FastMCP
 
+from mcp_servers import load_env
 
-# Load environment variables from .env file if present
-load_dotenv()
+load_env()
 
-# --- Pydantic Models for Brave API Responses ---
 
 class WebResult(BaseModel):
     title: str

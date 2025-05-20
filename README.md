@@ -1,107 +1,203 @@
-# mcp_servers
-A collection of MCP servers and a CLI tool to manage them.
+# mcp-servers
+
+A Python package providing a collection of Model-Control-Protocol (MCP) servers and a CLI tool to manage them efficiently.
 
 ## Disclaimer
 
-This project is created for personal use and does not guarantee stable behavior. It is made public
-solely as a reference for other programmers. The project is highly unstable, premature, and may produce
-undesired outcomes, so use it at your own risk.
+This project is created for personal use and does not guarantee stable behavior. It is made public solely as a reference for other programmers. The project is currently in early development, potentially unstable, and may produce undesired outcomes. Use at your own risk.
 
-## Development Setup
+---
 
-`git clone git@github.com:assagman/mcp_servers.git`
+## Overview
 
-`cd mcp_servers`
+mcp-servers implements Model-Control-Protocol servers for various integrations:
+- Filesystem access
+- Brave Search integration
+- SearXNG search integration
 
-`uv venv --python 3.12 && source .venv/bin/activate`
+These servers can be used by AI agents to interact with your system and external services in a controlled manner.
 
-`uv sync --extra dev`
+## Pre-requisites
+
+- [x] Python 3.12+
+- [x] `uv` (optional but recommended package/environment manager)
+- [x] `podman` or `docker` for container operations (e.g., running local SearXNG instance)
+- [x] OpenRouter API key and credits (for experimentation with examples)
+
+## Installation
+
+### Package Managers
+
+#### Using uv (recommended)
+```sh
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install --upgrade mcp-servers
+```
+
+#### Using pip
+```sh
+pip install --upgrade mcp-servers
+```
+
+### Development Setup
+```sh
+git clone git@github.com:assagman/mcp_servers.git
+cd mcp_servers
+uv venv --python 3.12
+source .venv/bin/activate
+uv sync --extra dev
+```
+
+## Configuration
+
+The package requires specific configuration files in your home directory. Initialize everything at once with:
+
+```sh
+mcpserver init
+```
+
+This command will:
+- Create `~/.mcp_servers/.env` → MCP Server HOST:PORTs, API KEYs, URLs, etc.
+- Create `~/.mcp_servers/searxng_config/settings.yml` → Configuration for local SearXNG instance
+
+⚠️ **Important**: You must set your own API keys in the generated `.env` file. They are left empty by default.
+
+For environment variable reference, see [.env.example](https://github.com/assagman/mcp_servers/blob/main/.env.example)
+
+## Usage
+
+### CLI Tool
+
+This package provides a CLI tool (`mcpserver`) to manage configuration, MCP servers, and external container operations:
+
+```sh
+mcpserver -h  # Show help
+```
+
+#### Server Management
+
+Each MCP server can be started in standard mode or detached mode. Detached mode runs the server in the background.
+
+##### Filesystem Server
+
+```sh
+# Start with temporary directory
+mcpserver start --server filesystem
+
+# Operate on specific directory
+mcpserver start --server filesystem --allowed-dir $(pwd)
+
+# Custom port
+mcpserver start --server filesystem --port 8765 --allowed-dir $(pwd)
+
+# Detached mode
+mcpserver start --server filesystem --detached
+mcpserver stop --server filesystem  # Stop detached server
+```
+
+##### Brave Search Server
+
+Requires `BRAVE_API_KEY` environment variable.
+
+```sh
+# Start server
+mcpserver start --server brave_search
+
+# Custom port
+mcpserver start --server brave_search --port 8766
+
+# Detached mode
+mcpserver start --server brave_search --detached
+mcpserver stop --server brave_search  # Stop detached server
+```
+
+##### SearXNG Search Server
+
+Requires `SEARXNG_BASE_URL` environment variable.
+
+```sh
+# Start local SearXNG container
+mcpserver run_external_container --container searxng
+
+# Start server
+mcpserver start --server searxng_search
+
+# Custom port
+mcpserver start --server searxng_search --port 8767
+
+# Detached mode
+mcpserver start --server searxng_search --detached
+mcpserver stop --server searxng_search  # Stop detached server
+
+# Stop SearXNG container
+mcpserver stop_external_container --container searxng
+```
+
+### Python API
+
+The package can also be imported and used programmatically. See example
+files in [examples/package_usage](https://github.com/assagman/mcp_servers/blob/main/examples/package_usage)
 
 ## Examples
 
-All LLM models are used from openrouter.ai, so on OPENROUTER_API_KEY
-env var is mandatory for this project to interact with a LLM model.
+The package includes examples demonstrating Agent-MCP Server usage with `pydantic_ai` Agents. All examples use `MCPServerHTTP` to connect agents with MCP Servers.
 
-`cp ./examples/.env.example ./examples/.env` then
-set your OPENROUTER_API_KEY in `./examples/.env`. In these examples
-`google/gemini-2.5-flash-preview` is picked as the LLM model since it's
-the best fit model for this workflow I experienced. You need to buy
-credits on https://openrouter.ai/settings/credits to experiment. Even
-some free alternatives can work sometimes, but either they do not produce consistent
-outputs or there are some problems with the hosting server like rate limits or unavailability.
-Make sure you select models with `tools usage`. Generally Google and OpenAI models, even
-with smaller/cheaper ones, works well.
+To experiment with all MCP servers:
 
-### Example usage: as a package in client code
+1. Set `BRAVE_API_KEY` in `~/.mcp_servers/.env` (for Brave search server)
+2. Set `OPENROUTER_API_KEY` in `~/.mcp_servers/.env` (required for all examples)
+3. Start SearXNG container (for SearXNG search server)
 
-`python examples/run_filesystem_agent.py`
+### CLI Usage Examples
 
-without making any changes, this command should be executed successfully as is, and it'll
-operate on a temporary directory.
+See [examples/cli_usage](https://github.com/assagman/mcp_servers/blob/main/examples/cli_usage) for examples requiring MCP servers to be started via the CLI commands mentioned above.
 
-### Example usage: as a separate, dedicated MCP server
+### Package Usage Examples
 
-`mcpserver start --server filesystem --port 8765 --allowed-dir $(pwd) --detach`
+See [examples/package_usage](https://github.com/assagman/mcp_servers/blob/main/examples/package_usage) for examples that can be executed as-is.
 
-Above command should start _MCP server for filesystem_ in the background process. `ps aux | rg mcpserver`
-is expected to show this related process.
+## Advanced Usage
 
-`python examples/run_filesystem_agent_2.py`
+### Custom Configuration
 
-after some chat with agent, please run below to stop the MCP server:
+You can customize server behavior by modifying configuration files:
 
-`mcpserver stop --server filesystem`
+```sh
+# Edit SearXNG settings
+vim ~/.mcp_servers/searxng_config/settings.yml
 
-This specific example uses CLI app utility to start/stop MCP seperately from the client code
-(different from the first example).
+# Edit environment variables
+vim ~/.mcp_servers/.env
+```
 
-### Others
+### Multiple Servers
 
-#### brave_search
+You can run multiple MCP servers simultaneously by specifying different ports:
 
-Create `.env` file in the top-level project directory, set BRAVE_API_KEY in it. Then excecute:
+```sh
+mcpserver start --server filesystem --port 8765 --detached
+mcpserver start --server brave_search --port 8766 --detached
+mcpserver start --server searxng_search --port 8767 --detached
+```
 
-`mcpserver start --server brave_search --port 8766 --detach`
+## Troubleshooting
 
-This will start the MCP Server. Let's test it with example agent:
+### Common Issues
 
-`python examples/run_brave_search_agent.py`
+1. **API Keys Not Working**: Ensure you've set the correct API keys in `~/.mcp_servers/.env`
+2. **Port Conflicts**: If a port is already in use, specify a different port with `--port`
+3. **Container Issues**: Use `podman logs searxng` or `docker logs searxng` to diagnose SearXNG container problems
 
-This will allow user to chat with agent, using MCP server for Brave Search. After some chat,
-you can stop it via:
+## Testing Specifications
 
-`mcpserver stop --server brave_search`
+- Tested on macOS (arm64)
+- Python 3.12
 
-#### searxng_search
+## License
 
-This is very similar to brave_search, but since public searxng instances may not meet users requirements
-in terms of configurations/settings like rate limiting, formats etc., it's better to run a local searxng instance
-and make this MCP server use it.
+This project is provided as-is with no warranty. See the [LICENSE](https://github.com/assagman/mcp_servers/blob/main/LICENSE) file for details.
 
-To do that, `podman` or `docker` can be used to run a official searxng container. This will require a minimal searxng settings setup.
-To manage all these minimal steps more easily, mcpserver CLI tool provide commands to start/stop searxng container:
+## Contributing
 
-`mcpserver run_external_container --container searxng`
-
-This will require user to have SEARXNG_BASE_URL set as environment variable. You can simply set this variable in
-`~/.mcp_servers/.env` file and tool will automatically pick it up, without any _sourcing_ process performed.
-
-Confirm that the container is up-and-running (`podman ps` or `docker ps`). Then, start searxng_search MCP server:
-
-`mcpserver start --server searxng_search --port 8767`
-
-Now, this MCP server can be accessible by agents. Here is an example usage:
-
-`python examples/run_searxng_search_agent.py`
-
-after some experimentation, you can shutdown both MCP Server for searxng and the external container via:
-
-`mcpserver stop --server searxng_search` for MCP server
-
-`mcpserver stop_external_container --container searxng` for external searxng container
-
-
-## Testing specs
-
-- macOS - arm64
-- python 3.12
+Contributions are welcome but not expected. If you find a bug or have a feature request, please consider forking this repo and use your own custom version.

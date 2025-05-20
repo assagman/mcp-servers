@@ -129,6 +129,7 @@ def run_searxng_container_command():
         "-p", f"{str(os.environ['SEARXNG_BASE_URL']).replace('http://','')}:8080",
         "-v", f"{os.path.expanduser('~/.mcp_servers/searxng_config')}:/etc/searxng:Z",
         "-e", f"SEARXNG_BASE_URL={str(os.getenv('SEARXNG_BASE_URL'))}",
+        "-e", f"SEARXNG_LIMITER=false",
         "docker.io/searxng/searxng"
     ]
 

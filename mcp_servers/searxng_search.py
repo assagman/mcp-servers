@@ -7,11 +7,11 @@ import asyncio
 import httpx
 import uvicorn
 from typing import List, Optional, Dict, Union, Any
-import builtins # Import builtins for robust access to str, type, etc.
+import builtins
 
-from dotenv import load_dotenv
 from pydantic import BaseModel, HttpUrl, Field
 from mcp.server.fastmcp import FastMCP
+from pydantic_ai.mcp import MCPServerHTTP
 
 from mcp_servers import load_env
 
@@ -378,24 +378,5 @@ class MCPServerSearXNG:
         await self._close_client()
         print(f"INFO: {self.SERVER_NAME} stop sequence completed.")
 
-async def main():
-    server_instance = MCPServerSearXNG()
-    main_server_task = None
-    try:
-        main_server_task = await server_instance.start()
-        if main_server_task: await main_server_task
-    except KeyboardInterrupt: print("INFO: Keyboard interrupt received, shutting down...")
-    except Exception as e:
-        print(f"FATAL: Server failed to start or run: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-    finally:
-        await server_instance.stop()
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except Exception as e:
-        print(f"CRITICAL: Unhandled error in main execution: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
+    def get_mcp_server_http(self):
+        return MCPServerHTTP(url=f'http://{self.SERVER_HOST}:{self.SERVER_PORT}/sse')

@@ -11,6 +11,7 @@ from typing import List, Optional, Dict
 from dotenv import load_dotenv
 from pydantic import BaseModel, HttpUrl, Field
 from mcp.server.fastmcp import FastMCP
+from pydantic_ai.mcp import MCPServerHTTP
 
 from mcp_servers import load_env
 
@@ -412,23 +413,27 @@ class MCPServerBraveSearch:
         await self._close_client()
         print(f"INFO: {self.SERVER_NAME} stop sequence completed.")
 
-# --- Main Execution ---
-async def main():
-    server_instance = MCPServerBraveSearch()
-    main_server_task = None
-    try:
-        main_server_task = await server_instance.start() # This now returns the uvicorn task
-        if main_server_task:
-            await main_server_task # Keep the main function alive by awaiting the server task
-    except KeyboardInterrupt:
-        print("INFO: Keyboard interrupt received, shutting down...")
-    except Exception as e:
-        print(f"FATAL: Server failed to start or run: {e}", file=sys.stderr)
-    finally:
-        await server_instance.stop()
+    def get_mcp_server_http(self):
+        return MCPServerHTTP(url=f'http://{self.SERVER_HOST}:{self.SERVER_PORT}/sse')
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except Exception as e: # Catch-all for errors during asyncio.run if main() itself fails badly
-        print(f"CRITICAL: Unhandled error in main execution: {e}", file=sys.stderr)
+
+# # --- Main Execution ---
+# async def main():
+#     server_instance = MCPServerBraveSearch()
+#     main_server_task = None
+#     try:
+#         main_server_task = await server_instance.start() # This now returns the uvicorn task
+#         if main_server_task:
+#             await main_server_task # Keep the main function alive by awaiting the server task
+#     except KeyboardInterrupt:
+#         print("INFO: Keyboard interrupt received, shutting down...")
+#     except Exception as e:
+#         print(f"FATAL: Server failed to start or run: {e}", file=sys.stderr)
+#     finally:
+#         await server_instance.stop()
+#
+# if __name__ == "__main__":
+#     try:
+#         asyncio.run(main())
+#     except Exception as e: # Catch-all for errors during asyncio.run if main() itself fails badly
+#         print(f"CRITICAL: Unhandled error in main execution: {e}", file=sys.stderr)

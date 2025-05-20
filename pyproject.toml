@@ -44,7 +44,7 @@ packages = ["mcp_servers"]
 mcpserver = "mcp_servers.cli_app:main"
 
 [project.urls]
-"Source" = "https://github.com/assagman/mcp_servers"
+"Source" = "https://github.com/assagman/mcp-servers"
 
 [project.optional-dependencies]
 dev = [

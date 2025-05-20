@@ -72,6 +72,35 @@ you can stop it via:
 
 `mcpserver stop --server brave_search`
 
+#### searxng_search
+
+This is very similar to brave_search, but since public searxng instances may not meet users requirements
+in terms of configurations/settings like rate limiting, formats etc., it's better to run a local searxng instance
+and make this MCP server use it.
+
+To do that, `podman` or `docker` can be used to run a official searxng container. This will require a minimal searxng settings setup.
+To manage all these minimal steps more easily, mcpserver CLI tool provide commands to start/stop searxng container:
+
+`mcpserver run_external_container --container searxng`
+
+This will require user to have SEARXNG_BASE_URL set as environment variable. You can simply set this variable in
+`~/.mcp_servers/.env` file and tool will automatically pick it up, without any _sourcing_ process performed.
+
+Confirm that the container is up-and-running (`podman ps` or `docker ps`). Then, start searxng_search MCP server:
+
+`mcpserver start --server searxng_search --port 8767`
+
+Now, this MCP server can be accessible by agents. Here is an example usage:
+
+`python examples/run_searxng_search_agent.py`
+
+after some experimentation, you can shutdown both MCP Server for searxng and the external container via:
+
+`mcpserver stop --server searxng_search` for MCP server
+
+`mcpserver stop_external_container --container searxng` for external searxng container
+
+
 ## Testing specs
 
 - macOS - arm64

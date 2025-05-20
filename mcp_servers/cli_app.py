@@ -4,6 +4,8 @@ import time
 import argparse
 from pathlib import Path
 import shutil
+import secrets
+import subprocess
 import asyncio
 import httpx
 import daemon
@@ -20,16 +22,34 @@ from mcp_servers.searxng_search import MCPServerSearXNG
 
 DEFAULT_CONFIG_DIR=Path("~/.mcp_servers").expanduser().resolve()
 DEFAULT_ENV_FILE = DEFAULT_CONFIG_DIR / ".env"
+DEFAULT_SEARXNG_CONFIG_DIR = DEFAULT_CONFIG_DIR / "searxng_config"
+DEFAULT_SEARXNG_SETTINGS_FILE = DEFAULT_SEARXNG_CONFIG_DIR / "settings.yml"
 load_dotenv(DEFAULT_ENV_FILE)
 
 
-def initialize_config(force: bool):
-    if force:
-        shutil.rmtree(DEFAULT_CONFIG_DIR)
+def initialize_config(subcommand: str, force: bool):
+    if not subcommand:
+        subcommand = "all"
+
+    if force and subcommand == "all":
+        if DEFAULT_CONFIG_DIR.exists():
+            print(f"Force removing tree: {DEFAULT_CONFIG_DIR}")
+            shutil.rmtree(DEFAULT_CONFIG_DIR)
+    else:
+        print(f"Skipped removing tree: {DEFAULT_CONFIG_DIR}")
+
 
     os.makedirs(DEFAULT_CONFIG_DIR, exist_ok=True)
 
-    if not DEFAULT_ENV_FILE.exists():
+    if force and subcommand in ["all", "env"]:
+        if DEFAULT_ENV_FILE.exists():
+            print(f"Deleting {DEFAULT_ENV_FILE}")
+            DEFAULT_ENV_FILE.unlink()
+    else:
+        print(f"Skipped removing {DEFAULT_ENV_FILE}")
+
+    if not DEFAULT_ENV_FILE.exists() and subcommand in ["all", "env"]:
+        print(f"Creating {DEFAULT_ENV_FILE}")
         url = f"https://raw.githubusercontent.com/assagman/mcp_servers/refs/tags/v{mcp_servers.__version__}/.env.example"
 
         try:
@@ -43,25 +63,122 @@ def initialize_config(force: bool):
             print(f"Error fetching the file: {e}")
         except OSError as e:
             print(f"Error writing to file: {e}")
+    else:
+        print("Skipped init for env")
 
-    # searxng
-    searxng_config_dir = DEFAULT_CONFIG_DIR / "searxng_config"
-    os.makedirs(searxng_config_dir, exist_ok=True)
+    if force and subcommand in ["all", "searxng"]:
+        if DEFAULT_SEARXNG_CONFIG_DIR.exists():
+            print(f"Force removed tree: {DEFAULT_SEARXNG_CONFIG_DIR}")
+            shutil.rmtree(DEFAULT_CONFIG_DIR)
+    else:
+        print(f"Skipped removing tree: {DEFAULT_SEARXNG_CONFIG_DIR}")
 
-    searxng_settings_file = searxng_config_dir / "settings.yml"
-    if not searxng_settings_file.exists():
-        with open(searxng_settings_file, "w") as f:
+    os.makedirs(DEFAULT_SEARXNG_CONFIG_DIR, exist_ok=True)
+
+    if not DEFAULT_SEARXNG_SETTINGS_FILE.exists() and subcommand in ["all", "searxng"]:
+        with open(DEFAULT_SEARXNG_SETTINGS_FILE, "w") as f:
             f.write(f"""
 use_default_settings: true
+
+server:
+  secret_key: {secrets.token_hex(32)}
+  limiter: false
 
 search:
   formats:
     - html
     - json
-
-server:
-  limiter: false
             """)
+    else:
+        print("Skipped init for searxng")
+
+
+def check_container_command_exists(command):
+    """Check if a command exists and is executable."""
+    return shutil.which(command) is not None
+
+def get_container_tool():
+    """Determine which container tool (podman or docker) is available."""
+    if check_container_command_exists("podman"):
+        return "podman"
+    elif check_container_command_exists("docker"):
+        return "docker"
+    else:
+        print("Error: Neither podman nor docker is installed or executable.")
+        sys.exit(1)
+
+def run_searxng_container_command():
+    """Execute the container run command using podman or docker."""
+    container_tool = get_container_tool()
+
+    searxng_base_url = os.getenv('SEARXNG_BASE_URL')
+    if not searxng_base_url:
+        raise ValueError(f"SEARXNG_BASE_URL env var must be set in {DEFAULT_ENV_FILE}")
+
+    # Define the container run command
+    command = [
+        container_tool, "run", "-d",
+        "--name", "searxng-local",
+        "-p", f"{str(os.environ['SEARXNG_BASE_URL']).replace('http://','')}:8080",
+        "-v", f"{os.path.expanduser('~/.mcp_servers/searxng_config')}:/etc/searxng:Z",
+        "-e", f"SEARXNG_BASE_URL={str(os.getenv('SEARXNG_BASE_URL'))}",
+        "docker.io/searxng/searxng"
+    ]
+
+    # Execute the command
+    try:
+        result = subprocess.run(command, check=True, text=True, capture_output=True)
+        print(f"Container started successfully using {container_tool}.")
+        print(f"Output: {result.stdout}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error: Failed to run container with {container_tool}.")
+        print(f"Error message: {e.stderr}")
+        sys.exit(1)
+
+def stop_searxng_container_command():
+    """Stop and remove the searxng-local container."""
+    container_tool = get_container_tool()
+
+    # Stop the container
+    stop_command = [container_tool, "stop", "searxng-local"]
+    try:
+        result = subprocess.run(stop_command, check=True, text=True, capture_output=True)
+        print(f"Container stopped successfully using {container_tool}.")
+        print(f"Output: {result.stdout}")
+    except subprocess.CalledProcessError as e:
+        if "no such container" in e.stderr.lower():
+            print("Container searxng-local does not exist or is already stopped.")
+        else:
+            print(f"Error: Failed to stop container with {container_tool}.")
+            print(f"Error message: {e.stderr}")
+        # Continue to attempt removal even if stop fails (e.g., container already stopped)
+
+    # Remove the container
+    rm_command = [container_tool, "rm", "searxng-local"]
+    try:
+        result = subprocess.run(rm_command, check=True, text=True, capture_output=True)
+        print(f"Container removed successfully using {container_tool}.")
+        print(f"Output: {result.stdout}")
+    except subprocess.CalledProcessError as e:
+        if "no such container" in e.stderr.lower():
+            print("Container searxng-local does not exist or is already removed.")
+        else:
+            print(f"Error: Failed to remove container with {container_tool}.")
+            print(f"Error message: {e.stderr}")
+            sys.exit(1)
+
+def run_external_container(container: str):
+    if container == "searxng":
+        run_searxng_container_command()
+    else:
+        raise NotImplementedError(container)
+
+
+def stop_external_container(container: str):
+    if container == "searxng":
+        stop_searxng_container_command()
+    else:
+        raise NotImplementedError(container)
 
 
 async def start_server(args):
@@ -254,6 +371,39 @@ def main():
         action="store_true",
         help=f"Force to overwrite entire {DEFAULT_CONFIG_DIR}",
     )
+    init_subparser = init_parser.add_subparsers(dest="subcommand")
+    init_env_parser = init_subparser.add_parser("env", help="Initialize .env")
+    init_env_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=f"Force to overwrite {DEFAULT_ENV_FILE}",
+    )
+    init_searxng_parser = init_subparser.add_parser("searxng", help="Initialize searxng config files")
+    init_searxng_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=f"Force to overwrite entire {DEFAULT_SEARXNG_CONFIG_DIR}",
+    )
+
+    run_external_container_parser = subparsers.add_parser("run_external_container", help="Run external container via podman or docker")
+    run_external_container_parser.add_argument(
+        "--container",
+        choices=[
+            "searxng",
+        ],
+        required=True,
+        help="Type of server to start"
+    )
+
+    stop_external_container_parser = subparsers.add_parser("stop_external_container", help="Stop external container via podman or docker")
+    stop_external_container_parser.add_argument(
+        "--container",
+        choices=[
+            "searxng",
+        ],
+        required=True,
+        help="Type of server to start"
+    )
 
 
     # Parse the arguments
@@ -278,4 +428,8 @@ def main():
     elif args.command == "stop":
         stop_server(args.server)
     elif args.command == "init":
-        initialize_config(args.force)
+        initialize_config(args.subcommand, args.force)
+    elif args.command == "run_external_container":
+        run_external_container(args.container)
+    elif args.command == "stop_external_container":
+        stop_external_container(args.container)

@@ -36,7 +36,8 @@ classifiers = [
 ]
 dependencies = [
     "pydantic-ai~=0.2.4",
-    "python-daemon"
+    "python-daemon",
+    "colorama"
 ]
 packages = ["mcp_servers"]
 

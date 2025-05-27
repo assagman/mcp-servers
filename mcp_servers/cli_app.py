@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import argparse
 from pathlib import Path
 import shutil
@@ -13,21 +12,19 @@ import daemon.pidfile
 import logging
 import signal
 
-from dotenv import load_dotenv
-
 import mcp_servers
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave_search import MCPServerBraveSearch
-from mcp_servers.searxng_search import MCPServerSearXNG
+from mcp_servers.searxng_search import MCPServerSearxngSearch
 from mcp_servers import (
     DEFAULT_CONFIG_DIR,
     DEFAULT_ENV_FILE,
     DEFAULT_SEARXNG_CONFIG_DIR,
     DEFAULT_SEARXNG_SETTINGS_FILE,
-    load_env
+    load_env_vars,
 )
 
-load_env()
+load_env_vars()
 
 
 def initialize_config(subcommand: str, force: bool):
@@ -40,7 +37,6 @@ def initialize_config(subcommand: str, force: bool):
             shutil.rmtree(DEFAULT_CONFIG_DIR)
     else:
         print(f"Skipped removing tree: {DEFAULT_CONFIG_DIR}")
-
 
     os.makedirs(DEFAULT_CONFIG_DIR, exist_ok=True)
 
@@ -104,6 +100,7 @@ def check_container_command_exists(command):
     """Check if a command exists and is executable."""
     return shutil.which(command) is not None
 
+
 def get_container_tool():
     """Determine which container tool (podman or docker) is available."""
     if check_container_command_exists("podman"):
@@ -114,23 +111,31 @@ def get_container_tool():
         print("Error: Neither podman nor docker is installed or executable.")
         sys.exit(1)
 
+
 def run_searxng_container_command():
     """Execute the container run command using podman or docker."""
     container_tool = get_container_tool()
 
-    searxng_base_url = os.getenv('SEARXNG_BASE_URL')
+    searxng_base_url = os.getenv("SEARXNG_BASE_URL")
     if not searxng_base_url:
         raise ValueError(f"SEARXNG_BASE_URL env var must be set in {DEFAULT_ENV_FILE}")
 
     # Define the container run command
     command = [
-        container_tool, "run", "-d",
-        "--name", "searxng-local",
-        "-p", f"{str(os.environ['SEARXNG_BASE_URL']).replace('http://','')}:8080",
-        "-v", f"{os.path.expanduser('~/.mcp_servers/searxng_config')}:/etc/searxng:Z",
-        "-e", f"SEARXNG_BASE_URL={str(os.getenv('SEARXNG_BASE_URL'))}",
-        "-e", f"SEARXNG_LIMITER=false",
-        "docker.io/searxng/searxng"
+        container_tool,
+        "run",
+        "-d",
+        "--name",
+        "searxng-local",
+        "-p",
+        f"{str(os.environ['SEARXNG_BASE_URL']).replace('http://', '')}:8080",
+        "-v",
+        f"{os.path.expanduser('~/.mcp_servers/searxng_config')}:/etc/searxng:Z",
+        "-e",
+        f"SEARXNG_BASE_URL={str(os.getenv('SEARXNG_BASE_URL'))}",
+        "-e",
+        "SEARXNG_LIMITER=false",
+        "docker.io/searxng/searxng",
     ]
 
     # Execute the command
@@ -143,6 +148,7 @@ def run_searxng_container_command():
         print(f"Error message: {e.stderr}")
         sys.exit(1)
 
+
 def stop_searxng_container_command():
     """Stop and remove the searxng-local container."""
     container_tool = get_container_tool()
@@ -150,7 +156,9 @@ def stop_searxng_container_command():
     # Stop the container
     stop_command = [container_tool, "stop", "searxng-local"]
     try:
-        result = subprocess.run(stop_command, check=True, text=True, capture_output=True)
+        result = subprocess.run(
+            stop_command, check=True, text=True, capture_output=True
+        )
         print(f"Container stopped successfully using {container_tool}.")
         print(f"Output: {result.stdout}")
     except subprocess.CalledProcessError as e:
@@ -175,6 +183,7 @@ def stop_searxng_container_command():
             print(f"Error message: {e.stderr}")
             sys.exit(1)
 
+
 def run_external_container(container: str):
     if container == "searxng":
         run_searxng_container_command()
@@ -196,7 +205,9 @@ async def start_server(args):
         if args.server == "filesystem":
             # Set environment variables if provided
             if args.allowed_dir:
-                os.environ["MCP_SERVER_FILESYSTEM_ALLOWED_DIR"] = str(Path(args.allowed_dir).expanduser().resolve())
+                os.environ["MCP_SERVER_FILESYSTEM_ALLOWED_DIR"] = str(
+                    Path(args.allowed_dir).expanduser().resolve()
+                )
             if args.host:
                 os.environ["MCP_SERVER_FILESYSTEM_HOST"] = args.host
             if args.port:
@@ -237,7 +248,7 @@ async def start_server(args):
                 os.environ["MCP_SERVER_SEARXNG_SEARCH_PORT"] = str(args.port)
 
             # Start the brave_search server
-            server = MCPServerSearXNG()
+            server = MCPServerSearxngSearch()
             try:
                 server_task = await server.start()
                 await server_task
@@ -247,6 +258,7 @@ async def start_server(args):
                 sys.exit(0)
         else:
             raise ValueError(f"Unknown server type: {args.server}")
+
 
 def stop_server(server: str):
     """Stop the running daemonized server."""
@@ -278,14 +290,16 @@ def stop_server(server: str):
         print(f"Error sending shutdown signal: {e}")
         sys.exit(1)
 
+
 def setup_logging(server: str):
     """Set up logging for the daemon process."""
     logging.basicConfig(
         filename=f"/tmp/mcp_server_{server}.log",
         level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s"
+        format="%(asctime)s - %(levelname)s - %(message)s",
     )
     return logging.getLogger()
+
 
 def daemon_main(args):
     """Main function for daemonized process."""
@@ -307,6 +321,7 @@ def daemon_main(args):
         logger.error(f"Daemon failed: {str(e)}")
         sys.exit(1)
 
+
 def check_existing_server(server: str):
     """Check if a server of the given type is already running."""
     pid_file = f"/tmp/mcp_server_{server}.pid"
@@ -316,17 +331,20 @@ def check_existing_server(server: str):
                 pid = int(f.read().strip())
             # Check if process is running
             os.kill(pid, 0)  # Raises OSError if process doesn't exist
-            print(f"Error: A {server} server is already running with PID {pid}. Stop it first using 'stop --server {server}'.")
+            print(
+                f"Error: A {server} server is already running with PID {pid}. Stop it first using 'stop --server {server}'."
+            )
             sys.exit(1)
         except (IOError, ValueError) as e:
             print(f"Error reading PID file: {e}. Removing stale PID file.")
             os.remove(pid_file)
 
+
 def main():
     """Parse arguments and decide whether to run in foreground or daemon mode."""
     parser = argparse.ArgumentParser(
         description="Command line interface for MCP Server",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
@@ -342,27 +360,19 @@ def main():
             "searxng_search",
         ],
         required=True,
-        help="Type of server to start"
+        help="Type of server to start",
     )
     start_parser.add_argument(
         "--allowed-dir",
         type=str,
-        help="Directory to use as the root for file operations"
+        help="Directory to use as the root for file operations",
     )
     start_parser.add_argument(
-        "--host",
-        type=str,
-        help="Host address to bind the server to"
+        "--host", type=str, help="Host address to bind the server to"
     )
+    start_parser.add_argument("--port", type=int, help="Port to run the server on")
     start_parser.add_argument(
-        "--port",
-        type=int,
-        help="Port to run the server on"
-    )
-    start_parser.add_argument(
-        "--detach",
-        action="store_true",
-        help="Run the server in detached (daemon) mode"
+        "--detach", action="store_true", help="Run the server in detached (daemon) mode"
     )
 
     stop_parser = subparsers.add_parser("stop", help="Stop a running MCP server")
@@ -374,7 +384,7 @@ def main():
             "searxng_search",
         ],
         required=True,
-        help="Type of server to start"
+        help="Type of server to start",
     )
 
     init_parser = subparsers.add_parser("init", help="Stop a running MCP server")
@@ -390,33 +400,38 @@ def main():
         action="store_true",
         help=f"Force to overwrite {DEFAULT_ENV_FILE}",
     )
-    init_searxng_parser = init_subparser.add_parser("searxng", help="Initialize searxng config files")
+    init_searxng_parser = init_subparser.add_parser(
+        "searxng", help="Initialize searxng config files"
+    )
     init_searxng_parser.add_argument(
         "--force",
         action="store_true",
         help=f"Force to overwrite entire {DEFAULT_SEARXNG_CONFIG_DIR}",
     )
 
-    run_external_container_parser = subparsers.add_parser("run_external_container", help="Run external container via podman or docker")
+    run_external_container_parser = subparsers.add_parser(
+        "run_external_container", help="Run external container via podman or docker"
+    )
     run_external_container_parser.add_argument(
         "--container",
         choices=[
             "searxng",
         ],
         required=True,
-        help="Type of server to start"
+        help="Type of server to start",
     )
 
-    stop_external_container_parser = subparsers.add_parser("stop_external_container", help="Stop external container via podman or docker")
+    stop_external_container_parser = subparsers.add_parser(
+        "stop_external_container", help="Stop external container via podman or docker"
+    )
     stop_external_container_parser.add_argument(
         "--container",
         choices=[
             "searxng",
         ],
         required=True,
-        help="Type of server to start"
+        help="Type of server to start",
     )
-
 
     # Parse the arguments
     args = parser.parse_args()
@@ -426,12 +441,14 @@ def main():
         check_existing_server(args.server)
         if args.detach:
             # Run in daemon mode
-            pidfile = daemon.pidfile.TimeoutPIDLockFile(f"/tmp/mcp_server_{args.server}.pid")
+            pidfile = daemon.pidfile.TimeoutPIDLockFile(
+                f"/tmp/mcp_server_{args.server}.pid"
+            )
             with daemon.DaemonContext(
                 pidfile=pidfile,
                 stdout=open(f"/tmp/mcp_server_{args.server}.out", "w"),
                 stderr=open(f"/tmp/mcp_server_{args.server}.err", "w"),
-                detach_process=True
+                detach_process=True,
             ):
                 daemon_main(args)
         else:

@@ -1,298 +1,514 @@
-import os
-import time
-import typing as t
-import asyncio
 import shutil
 import tempfile
+import os
 from pathlib import Path
+from typing import Union, List, Dict, cast, Any
+import datetime
 
-import uvicorn
+from pydantic import Field, AliasChoices, field_validator, model_validator
 from mcp.server.fastmcp import FastMCP
-from pydantic_ai.mcp import MCPServerHTTP
 
-from mcp_servers import load_env
+from mcp_servers.base import AbstractMCPServer, BaseMCPServerSettings
+from mcp_servers.logger import MCPServersLogger
 
-load_env()
+ERROR_PREFIX = "Error: "
+STR_ENCODING = "utf-8"
 
 
-class MCPServerFilesystem:
-    def __init__(self):
-        allowed_dir = os.environ.get("MCP_SERVER_FILESYSTEM_ALLOWED_DIR")
-        self.ALLOWED_DIRECTORY = Path(allowed_dir or str(tempfile.mkdtemp())).expanduser().resolve()
-        print(self.ALLOWED_DIRECTORY)
-
-        self.SERVER_NAME = "MCP_SERVER_FILESYSTEM"
-        self.SERVER_HOST = str(os.environ.get("MCP_SERVER_FILESYSTEM_HOST", "0.0.0.0"))
-        self.SERVER_PORT = int(os.environ.get("MCP_SERVER_FILESYSTEM_PORT", 8765))
-
-        self.validate()
-        print(f"INFO: {self.SERVER_NAME}")
-        print(f"INFO: Allowed directory for operations: {self.ALLOWED_DIRECTORY}")
-        print(f"INFO: Server will run on port: {self.SERVER_PORT}")
-        self.server = None
-        self.serve_task = None
-        self.uvicorn_server = None
-
-    def validate(self):
-        if not self.ALLOWED_DIRECTORY.is_dir():
-            print(f"Warning: ALLOWED_DIRECTORY '{self.ALLOWED_DIRECTORY}' does not exist or is not a directory. Creating it.")
-            self.ALLOWED_DIRECTORY.mkdir(parents=True, exist_ok=True)
-
-    async def start(self):
-        server = FastMCP(
-            name=self.SERVER_NAME,
-            port=self.SERVER_PORT
+class MCPServerFilesystemSettings(BaseMCPServerSettings):
+    """
+    Configuration settings for the MCPServerFilesystem.
+    Settings can be provided via environment variables (e.g., MCP_SERVER_FILESYSTEM_HOST).
+    """
+    SERVER_NAME: str = "MCP_SERVER_FILESYSTEM"
+    HOST: str = Field(
+        default="0.0.0.0",
+        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_HOST", "FS_HOST"),
+        description="Hostname or IP address to bind the server to."
+    )
+    PORT: int = Field(
+        default=8765,
+        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_PORT", "FS_PORT"),
+        description="Port number for the server to listen on."
+    )
+    ALLOWED_DIRECTORY: Path = Field(
+        default_factory=lambda: Path(tempfile.mkdtemp(prefix="mcp_fs_")),
+        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_ALLOWED_DIR", "FS_ALLOWED_DIR"),
+        description=(
+            "The root directory within which all file operations are sandboxed. "
+            "If not specified, a temporary directory will be created. "
+            "The path will be resolved to an absolute path."
         )
+    )
 
-        def _resolve_path_and_ensure_within_allowed(relative_path_str: str) -> Path:
-            """
-            Resolves a relative path against ALLOWED_DIRECTORY and ensures
-            the resulting path is within ALLOWED_DIRECTORY.
-            Raises ValueError if the path is outside the allowed scope or invalid.
-            """
-            if not relative_path_str:
-                relative_path_str = "."
-
-            if ".." in Path(relative_path_str).parts:
-                raise ValueError("Parent directories are not allowed.")
-
+    @field_validator("ALLOWED_DIRECTORY", mode="before")
+    @classmethod
+    def _validate_allowed_directory_path_str(cls, v: Any) -> Path:
+        """Ensure string paths are converted to resolved Path objects early."""
+        logger = MCPServersLogger.get_logger()
+        if isinstance(v, str):
             try:
-                if Path(relative_path_str).is_absolute():
-                    prospective_path = Path(relative_path_str).resolve()
-                else:
-                    prospective_path = (self.ALLOWED_DIRECTORY / relative_path_str).resolve()
+                path = Path(v).expanduser().resolve()
+                logger.debug(f"Converted string path '{v}' to '{path}'")
+                return path
             except Exception as e:
-                raise ValueError(f"Invalid path specified: {relative_path_str}. Error: {e}")
+                logger.error(f"Error resolving path string '{v}': {e}")
+                raise ValueError(f"Invalid path string for ALLOWED_DIRECTORY: {v}. Error: {e}") from e
+        if isinstance(v, Path):
+            return v.expanduser().resolve() # Ensure even Path objects are fully resolved
+        raise TypeError("ALLOWED_DIRECTORY must be a string or Path object.")
 
-            if prospective_path == self.ALLOWED_DIRECTORY:
-                return prospective_path
+    @model_validator(mode="after")
+    def _ensure_allowed_directory_is_valid(self) -> 'MCPServerFilesystemSettings':
+        """
+        Validate that the ALLOWED_DIRECTORY is an existing, absolute directory
+        after all field validations have run.
+        """
+        logger = MCPServersLogger.get_logger()
+        path = self.ALLOWED_DIRECTORY
+        if not path.is_absolute():
+            # This should ideally be caught by resolve() in the field_validator,
+            # but as a safeguard:
+            logger.warning(f"ALLOWED_DIRECTORY '{path}' was not absolute, resolving again.")
+            path = path.resolve()
+            self.ALLOWED_DIRECTORY = path
 
-            is_safe = prospective_path.is_relative_to(self.ALLOWED_DIRECTORY)
-            if not is_safe: # Allow exact match for ALLOWED_DIRECTORY
-                raise ValueError(
-                    f"Operation on path '{prospective_path}' is not allowed. "
-                    f"Paths must be within '{self.ALLOWED_DIRECTORY}'."
-                )
-            return prospective_path
+        if not path.is_dir():
+            logger.error(f"ALLOWED_DIRECTORY '{path}' is not a directory.")
+            raise ValueError(f"ALLOWED_DIRECTORY '{path}' must be a directory.")
+
+        logger.info(f"Validated and using ALLOWED_DIRECTORY: {path}")
+        return self
+
+    model_config = BaseMCPServerSettings.model_config
 
 
-        @server.tool()
+class MCPServerFilesystem(AbstractMCPServer):
+    """
+    An MCP Server that provides tools for AI agents to interact with a sandboxed
+    local filesystem. All operations are restricted to the `ALLOWED_DIRECTORY`
+    defined in the settings.
+    """
+
+    @property
+    def _fs_settings(self) -> MCPServerFilesystemSettings:
+        """Provides typed access to the filesystem specific settings."""
+        return cast(MCPServerFilesystemSettings, self.settings)
+
+    def _load_and_validate_settings(self) -> MCPServerFilesystemSettings:
+        """Loads and validates the filesystem server settings."""
+        return MCPServerFilesystemSettings()
+
+
+    def _log_initial_config(self) -> None:
+        """Logs the initial configuration of the server."""
+        settings = self._fs_settings
+        self.logger.info("--- MCPServerFilesystem Configuration ---")
+        self.logger.info(f"  SERVER_NAME:       {settings.SERVER_NAME}")
+        self.logger.info(f"  HOST:              {settings.HOST}")
+        self.logger.info(f"  PORT:              {settings.PORT}")
+        self.logger.info(f"  ALLOWED_DIRECTORY: {settings.ALLOWED_DIRECTORY}")
+        self.logger.info("--- End MCPServerFilesystem Configuration ---")
+
+    def _resolve_path_and_ensure_within_allowed(self, relative_path_str: str) -> Path:
+        """
+        Resolves a relative path string against `ALLOWED_DIRECTORY` and ensures
+        the resulting absolute path is securely within the `ALLOWED_DIRECTORY`.
+
+        Args:
+            relative_path_str: The user-provided path string, relative to `ALLOWED_DIRECTORY`.
+                               An empty string or "." refers to `ALLOWED_DIRECTORY` itself.
+
+        Returns:
+            A resolved, absolute Path object that is confirmed to be within the sandbox.
+
+        Raises:
+            ValueError: If the path is invalid, attempts traversal, or falls outside
+                        the `ALLOWED_DIRECTORY`.
+        """
+        allowed_dir = self._fs_settings.ALLOWED_DIRECTORY
+
+        if not isinstance(relative_path_str, str):
+            raise ValueError("Path must be a string.")
+        if not relative_path_str.strip():
+            relative_path_str = "."
+
+        # Disallow explicit path traversal components early.
+        # Path.resolve() handles symbolic links, but this adds an explicit layer.
+        if ".." in Path(relative_path_str).parts:
+            raise ValueError(
+                f"{ERROR_PREFIX}Path traversal ('..') is not allowed in '{relative_path_str}'."
+            )
+
+        try:
+            # Important: Resolve the path *after* joining with allowed_dir if it's relative.
+            # If an absolute path is given, Path() will handle it, but we still need to check
+            # if it's within ALLOWED_DIRECTORY.
+            candidate_path = Path(relative_path_str)
+            if candidate_path.is_absolute():
+                # If user provides an absolute path, it must still be within allowed_dir
+                prospective_path = candidate_path.resolve()
+            else:
+                prospective_path = (allowed_dir / candidate_path).resolve()
+
+        except Exception as e:
+            self.logger.warning(
+                f"Path resolution failed for '{relative_path_str}' "
+                f"against '{allowed_dir}': {e}", exc_info=True
+            )
+            raise ValueError(
+                f"{ERROR_PREFIX}Invalid path specified: '{relative_path_str}'. Error: {e}"
+            ) from e
+
+        # Final security check: The resolved path must be the allowed_dir itself or a descendant.
+        # Path.is_relative_to() was added in Python 3.9.
+        # For older Pythons, a common alternative is:
+        # `allowed_dir.resolve() in prospective_path.resolve().parents` or string prefix matching.
+        # However, `is_relative_to` is more robust.
+        if not (prospective_path == allowed_dir or prospective_path.is_relative_to(allowed_dir)):
+            raise ValueError(
+                f"{ERROR_PREFIX}Operation on path '{prospective_path}' is not allowed. "
+                f"Paths must be within the sandboxed directory: '{allowed_dir}'."
+            )
+        return prospective_path
+
+    async def _register_tools(self, mcp_server: FastMCP) -> None:
+        """Registers filesystem tools with the FastMCP server instance."""
+        self.logger.info(f"Registering tools for {self._fs_settings.SERVER_NAME}...")
+
+        @mcp_server.tool()
         async def get_working_directory() -> str:
             """
-            Returns the current working directory for file operations.
+            Returns the absolute path to the current working directory for file operations.
             All operations are sandboxed to this directory and its subdirectories.
             """
-            return str(self.ALLOWED_DIRECTORY)
+            return str(self._fs_settings.ALLOWED_DIRECTORY)
 
-        @server.tool()
-        async def list_files(path: str = ".") -> t.Union[t.List[t.Dict[str, str]], str]:
+        @mcp_server.tool()
+        async def list_directory(path: str = ".") -> Union[List[Dict[str, str]], str]:
             """
             Lists files and directories at the given path, relative to the allowed working directory.
+
             Args:
-                path (str, optional): The relative path from the working directory. Defaults to ".".
+                path (str, optional): The relative path from the working directory.
+                                      Defaults to "." (the working directory itself).
+
             Returns:
                 A list of dictionaries, each with 'name' and 'type' ('file' or 'directory'),
-                or an error string.
+                or an error string if the operation fails.
             """
             try:
-                target_path = _resolve_path_and_ensure_within_allowed(path)
+                target_path = self._resolve_path_and_ensure_within_allowed(path)
+                if not target_path.exists():
+                    return f"{ERROR_PREFIX}Path '{path}' does not exist."
                 if not target_path.is_dir():
-                    return f"Error: Path '{path}' is not a directory or does not exist."
+                    return f"{ERROR_PREFIX}Path '{path}' is not a directory."
 
                 entries = []
                 for item in target_path.iterdir():
-                    entries.append({
-                        "name": item.name,
-                        "type": "directory" if item.is_dir() else "file"
-                    })
+                    entries.append(
+                        {
+                            "name": item.name,
+                            "type": "directory" if item.is_dir() else "file",
+                        }
+                    )
+                self.logger.debug(f"Listed directory '{target_path}', found {len(entries)} items.")
                 return entries
-            except ValueError as e:
-                return f"Error: {e}"
+            except ValueError as e: # From _resolve_path_and_ensure_within_allowed
+                self.logger.warning(f"ValueError in list_directory for path '{path}': {e}")
+                return str(e)
             except Exception as e:
-                return f"Error listing files at '{path}': {e}"
+                self.logger.error(f"Error listing files at '{path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not list directory '{path}': {e}"
 
-        @server.tool()
+        @mcp_server.tool()
         async def read_file(path: str) -> str:
             """
             Reads the content of a file at the given path, relative to the allowed working directory.
+
             Args:
                 path (str): The relative path to the file.
+
             Returns:
-                The content of the file as a string, or an error string.
+                The content of the file as a string, or an error string if the operation fails.
             """
             try:
-                file_path = _resolve_path_and_ensure_within_allowed(path)
+                file_path = self._resolve_path_and_ensure_within_allowed(path)
+                if not file_path.exists():
+                    return f"{ERROR_PREFIX}File '{path}' not found."
                 if not file_path.is_file():
-                    return f"Error: Path '{path}' is not a file or does not exist."
-                # For very large files, streaming or chunking might be better,
-                # but for typical agent interactions, reading the whole file is common.
-                return file_path.read_text(encoding='utf-8')
-            except ValueError as e:
-                return f"Error: {e}"
-            except Exception as e:
-                return f"Error reading file '{path}': {e}"
+                    return f"{ERROR_PREFIX}Path '{path}' is not a file."
 
-        @server.tool()
-        async def write_file(path: str, content: str) -> str:
+                content = file_path.read_text(encoding=STR_ENCODING)
+                self.logger.debug(f"Read file '{file_path}' ({len(content)} bytes).")
+                # Consider adding a max file size limit here if desired.
+                return content
+            except ValueError as e:
+                self.logger.warning(f"ValueError in read_file for path '{path}': {e}")
+                return str(e)
+            except Exception as e:
+                self.logger.error(f"Error reading file '{path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not read file '{path}': {e}"
+
+        @mcp_server.tool()
+        async def write_file(path: str, content: str, create_parents: bool = False) -> str:
             """
             Writes content to a file at the given path, relative to the allowed working directory.
             Creates the file if it doesn't exist. Overwrites if it does.
-            Parent directories must exist.
+
             Args:
                 path (str): The relative path to the file.
                 content (str): The content to write to the file.
+                create_parents (bool, optional): If True, create parent directories if they
+                                                 do not exist. Defaults to False.
+
             Returns:
                 A success message or an error string.
             """
             try:
-                file_path = _resolve_path_and_ensure_within_allowed(path)
+                file_path = self._resolve_path_and_ensure_within_allowed(path)
 
-                # Security: Disallow writing to a directory
-                if file_path.is_dir():
-                    return f"Error: Path '{path}' is a directory. Cannot write file content to a directory."
+                if file_path.is_dir(): # Explicit check, though write_text would also fail
+                    return f"{ERROR_PREFIX}Path '{path}' is a directory. Cannot write file content to a directory."
 
-                # Ensure parent directory exists within the allowed scope
                 parent_dir = file_path.parent
-                if not parent_dir.is_dir() or not parent_dir.is_relative_to(self.ALLOWED_DIRECTORY) and parent_dir != self.ALLOWED_DIRECTORY:
-                     return f"Error: Parent directory for '{path}' does not exist within the allowed scope."
+                if not parent_dir.exists():
+                    if create_parents:
+                        # Ensure parent_dir is also within ALLOWED_DIRECTORY (implicitly checked by file_path)
+                        self.logger.info(f"Parent directory '{parent_dir}' for '{file_path}' does not exist. Creating.")
+                        parent_dir.mkdir(parents=True, exist_ok=True)
+                    else:
+                        return f"{ERROR_PREFIX}Parent directory for '{path}' does not exist. Use create_parents=True to create it."
+                elif not parent_dir.is_dir(): # Parent path exists but is not a directory
+                     return f"{ERROR_PREFIX}Parent path '{parent_dir.relative_to(self._fs_settings.ALLOWED_DIRECTORY)}' for '{path}' is not a directory."
 
-                file_path.write_text(content, encoding='utf-8')
+
+                file_path.write_text(content, encoding=STR_ENCODING)
+                self.logger.info(f"Successfully wrote {len(content)} bytes to file '{file_path}'.")
                 return f"Successfully wrote to file '{path}'."
             except ValueError as e:
-                return f"Error: {e}"
+                self.logger.warning(f"ValueError in write_file for path '{path}': {e}")
+                return str(e)
             except Exception as e:
-                return f"Error writing to file '{path}': {e}"
+                self.logger.error(f"Error writing to file '{path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not write to file '{path}': {e}"
 
-        @server.tool()
-        async def move_file(source_path: str, destination_path: str) -> str:
+        @mcp_server.tool()
+        async def move_item(source_path: str, destination_path: str) -> str:
             """
-            Moves or renames a file or directory from source_path to destination_path,
-            both relative to the allowed working directory.
+            Moves or renames a file or directory from source_path to destination_path.
+            Both paths are relative to the allowed working directory.
+
             Args:
                 source_path (str): The relative path of the source file/directory.
                 destination_path (str): The relative path of the destination.
+
             Returns:
                 A success message or an error string.
             """
             try:
-                source_abs_path = _resolve_path_and_ensure_within_allowed(source_path)
-                destination_abs_path = _resolve_path_and_ensure_within_allowed(destination_path)
+                source_abs = self._resolve_path_and_ensure_within_allowed(source_path)
+                dest_abs = self._resolve_path_and_ensure_within_allowed(destination_path)
 
-                if not source_abs_path.exists():
-                    return f"Error: Source path '{source_path}' does not exist."
-                if destination_abs_path.exists() and destination_abs_path.is_dir() and source_abs_path.is_file():
-                     # If destination is an existing directory, move source file into it
-                    destination_abs_path = destination_abs_path / source_abs_path.name
-                    # Re-check this new path to ensure it's still valid (though it should be)
-                    destination_abs_path = _resolve_path_and_ensure_within_allowed(str(destination_abs_path.relative_to(self.ALLOWED_DIRECTORY)))
+                if not source_abs.exists():
+                    return f"{ERROR_PREFIX}Source path '{source_path}' does not exist."
+
+                # Prevent moving allowed_directory itself
+                if source_abs == self._fs_settings.ALLOWED_DIRECTORY:
+                    return f"{ERROR_PREFIX}Cannot move the root allowed directory."
+
+                # Handle case: moving a file into an existing directory
+                if dest_abs.is_dir() and source_abs.is_file():
+                    final_dest_abs = dest_abs / source_abs.name
+                    # Re-validate the final destination path to be absolutely sure
+                    # This should already be safe if dest_abs was validated, but belt-and-suspenders.
+                    final_dest_abs_validated = self._resolve_path_and_ensure_within_allowed(
+                        str(final_dest_abs.relative_to(self._fs_settings.ALLOWED_DIRECTORY))
+                    )
+                    if final_dest_abs_validated.is_dir(): # Cannot overwrite a directory with a file implicitly
+                        return f"{ERROR_PREFIX}Cannot overwrite directory '{final_dest_abs_validated.relative_to(self._fs_settings.ALLOWED_DIRECTORY)}' with file '{source_path}'."
+                    dest_abs = final_dest_abs_validated
 
 
-                shutil.move(str(source_abs_path), str(destination_abs_path))
+                if dest_abs.exists() and source_abs.is_dir() and dest_abs.is_file():
+                    return f"{ERROR_PREFIX}Cannot overwrite file '{destination_path}' with directory '{source_path}'."
+
+                # Prevent moving a directory into itself or a subdirectory of itself.
+                if source_abs.is_dir() and dest_abs.is_relative_to(source_abs):
+                    return f"{ERROR_PREFIX}Cannot move directory '{source_path}' into itself or one of its subdirectories ('{destination_path}')."
+
+                if source_abs == dest_abs:
+                    return f"Source and destination '{source_path}' are the same. No action taken."
+
+
+                shutil.move(str(source_abs), str(dest_abs))
+                self.logger.info(f"Successfully moved '{source_abs}' to '{dest_abs}'.")
                 return f"Successfully moved '{source_path}' to '{destination_path}'."
             except ValueError as e:
-                return f"Error: {e}"
+                self.logger.warning(f"ValueError in move_item from '{source_path}' to '{destination_path}': {e}")
+                return str(e)
+            except shutil.Error as e: # Catches SameFileError etc.
+                self.logger.warning(f"Shutil error moving '{source_path}' to '{destination_path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Failed to move '{source_path}' to '{destination_path}': {e}"
             except Exception as e:
-                return f"Error moving '{source_path}' to '{destination_path}': {e}"
+                self.logger.error(f"Error moving '{source_path}' to '{destination_path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not move '{source_path}' to '{destination_path}': {e}"
 
-        @server.tool()
+        @mcp_server.tool()
         async def delete_file(path: str) -> str:
             """
             Deletes a file at the given path, relative to the allowed working directory.
+
             Args:
                 path (str): The relative path to the file to delete.
+
             Returns:
                 A success message or an error string.
             """
             try:
-                file_path = _resolve_path_and_ensure_within_allowed(path)
+                file_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not file_path.exists():
-                    return f"Error: File '{path}' not found."
+                    return f"{ERROR_PREFIX}File '{path}' not found."
                 if file_path.is_dir():
-                    return f"Error: Path '{path}' is a directory. Use 'delete_directory' to delete directories."
+                    return f"{ERROR_PREFIX}Path '{path}' is a directory. Use 'delete_directory' to delete directories."
+
                 file_path.unlink()
+                self.logger.info(f"Successfully deleted file '{file_path}'.")
                 return f"Successfully deleted file '{path}'."
             except ValueError as e:
-                return f"Error: {e}"
+                self.logger.warning(f"ValueError in delete_file for path '{path}': {e}")
+                return str(e)
             except Exception as e:
-                return f"Error deleting file '{path}': {e}"
+                self.logger.error(f"Error deleting file '{path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not delete file '{path}': {e}"
 
-        @server.tool()
+        @mcp_server.tool()
         async def create_directory(path: str) -> str:
             """
             Creates a directory at the given path, relative to the allowed working directory.
             Creates parent directories if they don't exist (like mkdir -p).
+
             Args:
                 path (str): The relative path of the directory to create.
+
             Returns:
                 A success message or an error string.
             """
             try:
-                dir_path = _resolve_path_and_ensure_within_allowed(path)
-                # exist_ok=True: no error if directory already exists
-                # parents=True: create parent_dirs if necessary
-                dir_path.mkdir(parents=True, exist_ok=True)
-                return f"Successfully created directory '{path}' (or it already existed)."
-            except ValueError as e:
-                return f"Error: {e}"
-            except Exception as e:
-                return f"Error creating directory '{path}': {e}"
+                dir_path = self._resolve_path_and_ensure_within_allowed(path)
+                if dir_path.exists() and not dir_path.is_dir():
+                    return f"{ERROR_PREFIX}Path '{path}' exists and is not a directory. Cannot create directory."
 
-        @server.tool()
+                dir_path.mkdir(parents=True, exist_ok=True)
+                self.logger.info(f"Successfully created directory '{dir_path}' (or it already existed).")
+                return (
+                    f"Successfully created directory '{path}' (or it already existed)."
+                )
+            except ValueError as e:
+                self.logger.warning(f"ValueError in create_directory for path '{path}': {e}")
+                return str(e)
+            except Exception as e:
+                self.logger.error(f"Error creating directory '{path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not create directory '{path}': {e}"
+
+        @mcp_server.tool()
         async def delete_directory(path: str, recursive: bool = False) -> str:
             """
             Deletes a directory at the given path, relative to the allowed working directory.
+
             Args:
                 path (str): The relative path of the directory to delete.
                 recursive (bool, optional): If True, delete the directory and its contents (like rm -rf).
                                             If False, only delete if empty. Defaults to False.
+
             Returns:
                 A success message or an error string.
             """
             try:
-                dir_path = _resolve_path_and_ensure_within_allowed(path)
+                dir_path = self._resolve_path_and_ensure_within_allowed(path)
+
+                if not dir_path.exists():
+                    return f"{ERROR_PREFIX}Directory '{path}' not found."
                 if not dir_path.is_dir():
-                    return f"Error: Path '{path}' is not a directory or does not exist."
-                if dir_path == self.ALLOWED_DIRECTORY:
-                    return f"Error: Cannot delete the root allowed directory '{path}'."
+                    return f"{ERROR_PREFIX}Path '{path}' is not a directory."
+                if dir_path == self._fs_settings.ALLOWED_DIRECTORY:
+                    return f"{ERROR_PREFIX}Cannot delete the root allowed directory '{path}'."
 
                 if recursive:
                     shutil.rmtree(dir_path)
+                    self.logger.info(f"Successfully deleted directory '{dir_path}' and its contents.")
                     return f"Successfully deleted directory '{path}' and its contents."
                 else:
                     if any(dir_path.iterdir()): # Check if directory is empty
-                        return f"Error: Directory '{path}' is not empty. Use recursive=True to delete non-empty directories."
+                        return f"{ERROR_PREFIX}Directory '{path}' is not empty. Use recursive=True to delete non-empty directories."
                     dir_path.rmdir()
+                    self.logger.info(f"Successfully deleted empty directory '{dir_path}'.")
                     return f"Successfully deleted empty directory '{path}'."
             except ValueError as e:
-                return f"Error: {e}"
+                self.logger.warning(f"ValueError in delete_directory for path '{path}': {e}")
+                return str(e)
             except Exception as e:
-                return f"Error deleting directory '{path}': {e}"
+                self.logger.error(f"Error deleting directory '{path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not delete directory '{path}': {e}"
 
-        uviconfig = uvicorn.Config(server.sse_app, host=self.SERVER_HOST, port=self.SERVER_PORT, log_level="info")
-        self.uvicorn_server = uvicorn.Server(uviconfig)
-        self.serve_task = asyncio.create_task(self.uvicorn_server.serve())
+        @mcp_server.tool()
+        async def get_item_metadata(path: str) -> Union[Dict[str, Any], str]:
+            """
+            Retrieves metadata for a file or directory at the given path.
 
-        while True:
-            await asyncio.sleep(1)
-            if self.uvicorn_server.started:
-                break
+            Args:
+                path (str): The relative path to the file or directory.
 
-        return self.serve_task
+            Returns:
+                A dictionary containing metadata (name, path, type, size, modified_time, created_time, absolute_path)
+                or an error string if the operation fails. Times are in ISO 8601 format.
+            """
+            try:
+                target_path = self._resolve_path_and_ensure_within_allowed(path)
+                if not target_path.exists():
+                    return f"{ERROR_PREFIX}Path '{path}' does not exist."
 
-    async def stop(self): # Optional: for more controlled shutdown
-        if hasattr(self, 'server_instance') and self.uvicorn_server:
-            print(f"INFO: Attempting to shut down {self.SERVER_NAME}...")
-            self.uvicorn_server.should_exit = True
-            # Give it a moment, or await a shutdown completion if available
-            if self.serve_task and not self.serve_task.done():
-                 self.serve_task.cancel()
-                 try:
-                     await self.serve_task
-                 except asyncio.CancelledError:
-                     print(f"INFO: {self.SERVER_NAME} serve task successfully cancelled.")
-                 except Exception as e:
-                     print(f"ERROR: Exception during serve_task cancellation: {e}")
-        print(f"INFO: {self.SERVER_NAME} stop sequence initiated.")
+                stat_info = target_path.stat()
+                item_type = "directory" if target_path.is_dir() else "file"
 
-    def get_mcp_server_http(self):
-        return MCPServerHTTP(url=f'http://{self.SERVER_HOST}:{self.SERVER_PORT}/sse')
+                # Convert timestamps to human-readable ISO format
+                # Note: ctime behavior varies by OS (creation time on Windows, metadata change time on Unix)
+                modified_time = datetime.datetime.fromtimestamp(stat_info.st_mtime, tz=datetime.timezone.utc).isoformat()
+                created_time = datetime.datetime.fromtimestamp(stat_info.st_ctime, tz=datetime.timezone.utc).isoformat()
+                # For more accurate creation time on Unix, os.stat().st_birthtime (macOS, FreeBSD) might be available
+                # but st_ctime is more portable as a "change time" / "birth time on Windows"
+                try:
+                    # Python 3.7+ on some OSes
+                    birth_time_ts = stat_info.st_birthtime
+                    created_time = datetime.datetime.fromtimestamp(birth_time_ts, tz=datetime.timezone.utc).isoformat()
+                except AttributeError:
+                    pass # st_birthtime not available, use st_ctime as fallback
+
+
+                metadata = {
+                    "name": target_path.name,
+                    "relative_path": path, # The user-provided relative path
+                    "absolute_path": str(target_path),
+                    "type": item_type,
+                    "size_bytes": stat_info.st_size,
+                    "modified_time_utc": modified_time,
+                    "created_time_utc": created_time, # Or metadata_changed_time_utc on some Unix
+                    "is_symlink": target_path.is_symlink(),
+                }
+                if target_path.is_symlink():
+                    try:
+                        metadata["symlink_target"] = str(os.readlink(target_path))
+                    except OSError:
+                        metadata["symlink_target"] = "[Error reading link target]"
+
+
+                self.logger.debug(f"Retrieved metadata for '{target_path}'.")
+                return metadata
+            except ValueError as e:
+                self.logger.warning(f"ValueError in get_item_metadata for path '{path}': {e}")
+                return str(e)
+            except Exception as e:
+                self.logger.error(f"Error getting metadata for '{path}': {e}", exc_info=True)
+                return f"{ERROR_PREFIX}Could not get metadata for '{path}': {e}"
+
+        self.logger.info(f"Successfully registered tools for {self._fs_settings.SERVER_NAME}.")

@@ -1,27 +1,24 @@
 import os
 import asyncio
-from pathlib import Path
-from dotenv import load_dotenv
 
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
-from pydantic_ai.mcp import MCPServerHTTP
 
-from mcp_servers.searxng_search import MCPServerSearXNG
-from mcp_servers import load_env
+from mcp_servers.searxng_search import MCPServerSearxngSearch
+from mcp_servers import load_env_vars
 
-load_env()
+load_env_vars()
 
 
 async def main():
     # Instantiate the server
-    mcp_server_searxng_search = MCPServerSearXNG()
+    mcp_server_searxng_search = MCPServerSearxngSearch()
     _ = await mcp_server_searxng_search.start()
 
     #
     model = OpenAIModel(
-        model_name="google/gemini-2.5-flash-preview",
+        model_name="google/gemini-2.5-flash-preview-05-20",
         provider=OpenAIProvider(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.environ["OPENROUTER_API_KEY"],
@@ -57,11 +54,10 @@ async def main():
             message_history = []
             if result:
                 message_history = result.all_messages()
-            result = await agent.run(input('[USER]: '), message_history=message_history)
+            result = await agent.run(input("[USER]: "), message_history=message_history)
             print(result.output)
             print()
             print()
-
 
 
 if __name__ == "__main__":

@@ -1,0 +1,94 @@
+import os
+import asyncio
+
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.agent import Agent
+from pydantic_ai.mcp import MCPServerHTTP
+
+from mcp_servers import load_env_vars
+
+load_env_vars()
+
+
+assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
+if not os.environ.get("MCP_SERVER_TAVILY_SEARCH_HOST"):
+    os.environ["MCP_SERVER_TAVILY_SEARCH_HOST"] = "0.0.0.0"
+if not os.environ.get("MCP_SERVER_TAVILY_SEARCH_PORT"):
+    os.environ["MCP_SERVER_TAVILY_SEARCH_PORT"] = "8767"
+
+
+async def main():
+    # Instantiate the server
+    mcp_server_tavily_search = MCPServerHTTP(
+        f"http://{os.environ['MCP_SERVER_TAVILY_SEARCH_HOST']}:{os.environ['MCP_SERVER_TAVILY_SEARCH_PORT']}/sse"
+    )
+    #
+    model = OpenAIModel(
+        model_name="google/gemini-2.5-flash-preview-05-20",
+        provider=OpenAIProvider(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.environ["OPENROUTER_API_KEY"],
+        ),
+    )
+
+    system_prompt = f"""
+        You are an tavily search AI agent. You are allowed use MCP tools to perform web search, extraction url content, and crawling webpages recursively.
+
+        - Always generate a maningful query for tavily search and perform web search, obtain links and extract content.
+        - Provide necessary answer to users' questions
+        - Provide all web links you used to answer users question as a bullet list at the end of your answers.
+        - If you need to perform simultaneous tavily search calls, wait 1 second between each call
+        - If you or user need the url content, use Tavily's extract feature.
+        - if user ask you to deeply analyze an URL and it's sub pages, use crawl tool.
+
+        Your typical answer template:
+        <Search Topic Info>
+
+        <Answer to users' question>
+
+        <Citations>
+    """
+
+    agent = Agent(
+        model,
+        mcp_servers=[mcp_server_tavily_search],
+        system_prompt=system_prompt,
+    )
+
+    async with agent.run_mcp_servers():
+        result = None
+        while True:
+            # Call a tool on the server
+            message_history = []
+            if result:
+                message_history = result.all_messages()
+
+            user_multiline_input = None
+            while True:
+                line = input("[USER]: ")
+                line = line.strip()
+                if line == "!":
+                    break
+                if line == "q!":
+                    import sys
+
+                    sys.exit(0)
+                if user_multiline_input:
+                    user_multiline_input = line
+                else:
+                    user_multiline_input = f"""
+{user_multiline_input}
+{line}
+                    """
+
+            result = await agent.run(
+                user_multiline_input, message_history=message_history
+            )
+            print(result.output)
+            print()
+            print()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

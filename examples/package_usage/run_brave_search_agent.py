@@ -8,9 +8,9 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
 
 from mcp_servers.brave_search import MCPServerBraveSearch
-from mcp_servers import load_env
+from mcp_servers import load_env_vars
 
-load_env()
+load_env_vars()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
@@ -20,9 +20,10 @@ async def main():
     # Instantiate the server
     mcp_server_brave_search = MCPServerBraveSearch()
     _ = await mcp_server_brave_search.start()
+
     #
     model = OpenAIModel(
-        model_name="google/gemini-2.5-flash-preview",
+        model_name="google/gemini-2.5-flash-preview-05-20",
         provider=OpenAIProvider(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.environ["OPENROUTER_API_KEY"],
@@ -58,11 +59,10 @@ async def main():
             message_history = []
             if result:
                 message_history = result.all_messages()
-            result = await agent.run(input('[USER]: '), message_history=message_history)
+            result = await agent.run(input("[USER]: "), message_history=message_history)
             print(result.output)
             print()
             print()
-
 
 
 if __name__ == "__main__":

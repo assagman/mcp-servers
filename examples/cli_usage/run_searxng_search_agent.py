@@ -8,23 +8,26 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
 from pydantic_ai.mcp import MCPServerHTTP
 
-from mcp_servers import load_env
+from mcp_servers import load_env_vars
 
-load_env()
+load_env_vars()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
 if not os.environ.get("MCP_SERVER_SEARXNG_SEARCH_HOST"):
-    os.environ['MCP_SERVER_SEARXNG_SEARCH_HOST'] = "0.0.0.0"
+    os.environ["MCP_SERVER_SEARXNG_SEARCH_HOST"] = "0.0.0.0"
 if not os.environ.get("MCP_SERVER_SEARXNG_SEARCH_PORT"):
-    os.environ['MCP_SERVER_SEARXNG_SEARCH_PORT'] = "8767"
+    os.environ["MCP_SERVER_SEARXNG_SEARCH_PORT"] = "8767"
+
 
 async def main():
     # Instantiate the server
-    mcp_server_searxng_search = MCPServerHTTP(f"http://{os.environ['MCP_SERVER_SEARXNG_SEARCH_HOST']}:{os.environ['MCP_SERVER_SEARXNG_SEARCH_PORT']}/sse")
+    mcp_server_searxng_search = MCPServerHTTP(
+        f"http://{os.environ['MCP_SERVER_SEARXNG_SEARCH_HOST']}:{os.environ['MCP_SERVER_SEARXNG_SEARCH_PORT']}/sse"
+    )
     #
     model = OpenAIModel(
-        model_name="google/gemini-2.5-flash-preview",
+        model_name="google/gemini-2.5-flash-preview-05-20",
         provider=OpenAIProvider(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.environ["OPENROUTER_API_KEY"],
@@ -60,11 +63,10 @@ async def main():
             message_history = []
             if result:
                 message_history = result.all_messages()
-            result = await agent.run(input('[USER]: '), message_history=message_history)
+            result = await agent.run(input("[USER]: "), message_history=message_history)
             print(result.output)
             print()
             print()
-
 
 
 if __name__ == "__main__":

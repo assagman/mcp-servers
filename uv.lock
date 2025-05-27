@@ -633,9 +633,10 @@ wheels = [
 
 [[package]]
 name = "mcp-servers"
-version = "0.1.0"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
+    { name = "colorama" },
     { name = "pydantic-ai" },
     { name = "python-daemon" },
 ]
@@ -649,6 +650,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.2" },
+    { name = "colorama" },
     { name = "pydantic-ai", specifier = "~=0.2.4" },
     { name = "python-daemon" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5.1.1" },

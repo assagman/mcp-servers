@@ -136,26 +136,22 @@ class MCPServerTavilySearch(MCPServerHttpBase):
     MCP Server for interacting with the Tavily AI Search API.
     Provides tools for web search and content extraction.
     """
+    @property
+    def settings(self):
+        return cast(TavilySearchServerSettings, self._settings)
 
     def _load_and_validate_settings(self) -> TavilySearchServerSettings:
         """Load Brave Search specific MCP server settings"""
         return TavilySearchServerSettings()
 
-    @property
-    def _tavily_settings(self) -> TavilySearchServerSettings:
-        """Provides typed access to the filesystem specific settings."""
-        return cast(TavilySearchServerSettings, self.settings)
-
     def _log_initial_config(self):
         super()._log_initial_config()
 
-        settings: TavilySearchServerSettings = self._tavily_settings
-
         self.logger.info("--- MCPServerFilesystem Configuration ---")
-        self.logger.info(f"  SERVER_NAME:       {settings.SERVER_NAME}")
-        self.logger.info(f"  HOST:              {settings.HOST}")
-        self.logger.info(f"  PORT:              {settings.PORT}")
-        self.logger.info(f"  BASE_URL:          {settings.BASE_URL}")
+        self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
+        self.logger.info(f"  HOST:              {self.settings.HOST}")
+        self.logger.info(f"  PORT:              {self.settings.PORT}")
+        self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
         self.logger.info("--- End MCPServerFilesystem Configuration ---")
 
     def _get_http_client_config(self) -> Dict[str, Any]:

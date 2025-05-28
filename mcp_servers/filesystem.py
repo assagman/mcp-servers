@@ -23,12 +23,12 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
     SERVER_NAME: str = "MCP_SERVER_FILESYSTEM"
     HOST: str = Field(
         default="0.0.0.0",
-        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_HOST", "FS_HOST"),
+        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_HOST"),
         description="Hostname or IP address to bind the server to."
     )
     PORT: int = Field(
         default=8765,
-        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_PORT", "FS_PORT"),
+        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_PORT"),
         description="Port number for the server to listen on."
     )
     ALLOWED_DIRECTORY: Path = Field(
@@ -91,18 +91,16 @@ class MCPServerFilesystem(AbstractMCPServer):
     """
 
     @property
-    def _fs_settings(self) -> MCPServerFilesystemSettings:
-        """Provides typed access to the filesystem specific settings."""
-        return cast(MCPServerFilesystemSettings, self.settings)
+    def settings(self):
+        return cast(MCPServerFilesystemSettings, self._settings)
 
     def _load_and_validate_settings(self) -> MCPServerFilesystemSettings:
         """Loads and validates the filesystem server settings."""
         return MCPServerFilesystemSettings()
 
-
     def _log_initial_config(self) -> None:
         """Logs the initial configuration of the server."""
-        settings = self._fs_settings
+        settings: MCPServerFilesystemSettings = self.settings
         self.logger.info("--- MCPServerFilesystem Configuration ---")
         self.logger.info(f"  SERVER_NAME:       {settings.SERVER_NAME}")
         self.logger.info(f"  HOST:              {settings.HOST}")
@@ -126,7 +124,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             ValueError: If the path is invalid, attempts traversal, or falls outside
                         the `ALLOWED_DIRECTORY`.
         """
-        allowed_dir = self._fs_settings.ALLOWED_DIRECTORY
+        allowed_dir = self.settings.ALLOWED_DIRECTORY
 
         if not isinstance(relative_path_str, str):
             raise ValueError("Path must be a string.")
@@ -174,7 +172,7 @@ class MCPServerFilesystem(AbstractMCPServer):
 
     async def _register_tools(self, mcp_server: FastMCP) -> None:
         """Registers filesystem tools with the FastMCP server instance."""
-        self.logger.info(f"Registering tools for {self._fs_settings.SERVER_NAME}...")
+        self.logger.info(f"Registering tools for {self.settings.SERVER_NAME}...")
 
         @mcp_server.tool()
         async def get_working_directory() -> str:
@@ -182,7 +180,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns the absolute path to the current working directory for file operations.
             All operations are sandboxed to this directory and its subdirectories.
             """
-            return str(self._fs_settings.ALLOWED_DIRECTORY)
+            return str(self.settings.ALLOWED_DIRECTORY)
 
         @mcp_server.tool()
         async def list_directory(path: str = ".") -> Union[List[Dict[str, str]], str]:
@@ -280,7 +278,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                     else:
                         return f"{ERROR_PREFIX}Parent directory for '{path}' does not exist. Use create_parents=True to create it."
                 elif not parent_dir.is_dir(): # Parent path exists but is not a directory
-                     return f"{ERROR_PREFIX}Parent path '{parent_dir.relative_to(self._fs_settings.ALLOWED_DIRECTORY)}' for '{path}' is not a directory."
+                     return f"{ERROR_PREFIX}Parent path '{parent_dir.relative_to(self.settings.ALLOWED_DIRECTORY)}' for '{path}' is not a directory."
 
 
                 file_path.write_text(content, encoding=STR_ENCODING)
@@ -314,7 +312,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                     return f"{ERROR_PREFIX}Source path '{source_path}' does not exist."
 
                 # Prevent moving allowed_directory itself
-                if source_abs == self._fs_settings.ALLOWED_DIRECTORY:
+                if source_abs == self.settings.ALLOWED_DIRECTORY:
                     return f"{ERROR_PREFIX}Cannot move the root allowed directory."
 
                 # Handle case: moving a file into an existing directory
@@ -323,10 +321,10 @@ class MCPServerFilesystem(AbstractMCPServer):
                     # Re-validate the final destination path to be absolutely sure
                     # This should already be safe if dest_abs was validated, but belt-and-suspenders.
                     final_dest_abs_validated = self._resolve_path_and_ensure_within_allowed(
-                        str(final_dest_abs.relative_to(self._fs_settings.ALLOWED_DIRECTORY))
+                        str(final_dest_abs.relative_to(self.settings.ALLOWED_DIRECTORY))
                     )
                     if final_dest_abs_validated.is_dir(): # Cannot overwrite a directory with a file implicitly
-                        return f"{ERROR_PREFIX}Cannot overwrite directory '{final_dest_abs_validated.relative_to(self._fs_settings.ALLOWED_DIRECTORY)}' with file '{source_path}'."
+                        return f"{ERROR_PREFIX}Cannot overwrite directory '{final_dest_abs_validated.relative_to(self.settings.ALLOWED_DIRECTORY)}' with file '{source_path}'."
                     dest_abs = final_dest_abs_validated
 
 
@@ -431,7 +429,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                     return f"{ERROR_PREFIX}Directory '{path}' not found."
                 if not dir_path.is_dir():
                     return f"{ERROR_PREFIX}Path '{path}' is not a directory."
-                if dir_path == self._fs_settings.ALLOWED_DIRECTORY:
+                if dir_path == self.settings.ALLOWED_DIRECTORY:
                     return f"{ERROR_PREFIX}Cannot delete the root allowed directory '{path}'."
 
                 if recursive:
@@ -511,4 +509,4 @@ class MCPServerFilesystem(AbstractMCPServer):
                 self.logger.error(f"Error getting metadata for '{path}': {e}", exc_info=True)
                 return f"{ERROR_PREFIX}Could not get metadata for '{path}': {e}"
 
-        self.logger.info(f"Successfully registered tools for {self._fs_settings.SERVER_NAME}.")
+        self.logger.info(f"Successfully registered tools for {self.settings.SERVER_NAME}.")

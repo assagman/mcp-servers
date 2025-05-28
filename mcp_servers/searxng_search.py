@@ -49,36 +49,32 @@ class SearXNGServerSettings(MCPServerHttpBaseSettings):
 
 class MCPServerSearxngSearch(MCPServerHttpBase):
 
+    @property
+    def settings(self):
+        return cast(SearXNGServerSettings, self._settings)
+
     def _load_and_validate_settings(self) -> SearXNGServerSettings:
         """Load Searxng Search specific MCP server settings"""
         return SearXNGServerSettings()
 
-    @property
-    def _searxng_settings(self) -> SearXNGServerSettings:
-        """Provides typed access to the filesystem specific settings."""
-        return cast(SearXNGServerSettings, self.settings)
-
     def _log_initial_config(self):
         super()._log_initial_config()
 
-        settings: SearXNGServerSettings = self._searxng_settings
-
         self.logger.info("--- MCPServerFilesystem Configuration ---")
-        self.logger.info(f"  SERVER_NAME:       {settings.SERVER_NAME}")
-        self.logger.info(f"  HOST:              {settings.HOST}")
-        self.logger.info(f"  PORT:              {settings.PORT}")
-        self.logger.info(f"  BASE_URL:          {settings.BASE_URL}")
+        self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
+        self.logger.info(f"  HOST:              {self.settings.HOST}")
+        self.logger.info(f"  PORT:              {self.settings.PORT}")
+        self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
         self.logger.info("--- End MCPServerFilesystem Configuration ---")
 
     def _get_http_client_config(self) -> Dict[str, Any]:
         """Configures the HTTP client for SearXNG."""
-        settings: SearXNGServerSettings = self.settings # type: ignore
         # auth = None
-        # if settings.USERNAME and settings.PASSWORD:
-        #     auth = httpx.BasicAuth(settings.USERNAME, settings.PASSWORD)
+        # if self.settings.USERNAME and self.settings.PASSWORD:
+        #     auth = httpx.BasicAuth(self.settings.USERNAME, self.settings.PASSWORD)
 
         return {
-            "base_url": str(settings.BASE_URL), # Convert HttpUrl to string for httpx
+            "base_url": str(self.settings.BASE_URL), # Convert HttpUrl to string for httpx
             "headers": {"Accept": "application/json"},
             # "auth": auth,
         }

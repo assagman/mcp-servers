@@ -4,7 +4,7 @@ import asyncio
 import logging
 import httpx
 import uvicorn
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from typing import Optional, Dict, Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,9 +47,6 @@ class AbstractMCPServer(ABC):
         specific settings in their __init__ and pass them to super().__init__(settings=...).
         Alternatively, this __init__ can call an abstract method to load settings.
         """
-        # load_env_vars()
-
-        self.settings: BaseMCPServerSettings = self._load_and_validate_settings()
         self.logger = MCPServersLogger.get_logger(__class__.__name__)
 
         self.http_client: Optional[httpx.AsyncClient] = None
@@ -61,13 +58,17 @@ class AbstractMCPServer(ABC):
             "last_second_reset_ts": time.time(),
             "second_count": 0,
         }
+
+        self._settings = self._load_and_validate_settings()
         self._log_initial_config()
 
+    @abstractproperty
+    def settings(self) -> BaseMCPServerSettings:
+        return self._settings
+
+    @abstractmethod
     def _log_initial_config(self):
-        self.logger.info(f"Initializing {self.settings.SERVER_NAME}...")
-        self.logger.info(f"Host: {self.settings.HOST}, Port: {self.settings.PORT}")
-        if self.settings.RATE_LIMIT_PER_SECOND:
-            self.logger.info(f"Client-side rate limit: {self.settings.RATE_LIMIT_PER_SECOND} req/sec (base).")
+        pass
 
     @abstractmethod
     def _load_and_validate_settings(self) -> BaseMCPServerSettings:

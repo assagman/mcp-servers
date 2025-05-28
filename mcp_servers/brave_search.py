@@ -45,25 +45,22 @@ class BraveSearchServerSettings(MCPServerHttpBaseSettings):
 
 class MCPServerBraveSearch(MCPServerHttpBase):
 
+    @property
+    def settings(self):
+        return cast(BraveSearchServerSettings, self._settings)
+
     def _load_and_validate_settings(self) -> BraveSearchServerSettings:
         """Load Brave Search specific MCP server settings"""
         return BraveSearchServerSettings()
 
-    @property
-    def _brave_settings(self) -> BraveSearchServerSettings:
-        """Provides typed access to the filesystem specific settings."""
-        return cast(BraveSearchServerSettings, self.settings)
-
     def _log_initial_config(self):
         super()._log_initial_config()
 
-        settings: BraveSearchServerSettings = self._brave_settings
-
         self.logger.info("--- MCPServerFilesystem Configuration ---")
-        self.logger.info(f"  SERVER_NAME:       {settings.SERVER_NAME}")
-        self.logger.info(f"  HOST:              {settings.HOST}")
-        self.logger.info(f"  PORT:              {settings.PORT}")
-        self.logger.info(f"  BASE_URL:          {settings.BASE_URL}")
+        self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
+        self.logger.info(f"  HOST:              {self.settings.HOST}")
+        self.logger.info(f"  PORT:              {self.settings.PORT}")
+        self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
         self.logger.info("--- End MCPServerFilesystem Configuration ---")
 
 

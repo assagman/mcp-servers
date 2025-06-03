@@ -272,18 +272,32 @@ async def start_server(args):
             raise ValueError(f"Unknown server type: {args.server}")
 
 
-def stop_server(server: str):
+def stop_server(server: str, port: str):
     """Stop the running daemonized server."""
-    pid_file = f"/tmp/mcp_server_{server}.pid"
-    if not os.path.exists(pid_file):
+
+    base_file_name = f"mcp_server_{server}"
+    if port:
+        base_file_name = base_file_name + "_" + str(port)
+
+    pid_filename = "/tmp/" + base_file_name + ".pid"
+    out_filename = "/tmp/" + base_file_name + ".out"
+    err_filename = "/tmp/" + base_file_name + ".err"
+    print(pid_filename)
+    print(out_filename)
+    print(err_filename)
+    if not os.path.exists(pid_filename):
         print("Error: No running server found (PID file does not exist).")
+        os.remove(out_filename)
+        os.remove(err_filename)
         sys.exit(1)
 
     try:
-        with open(pid_file, "r") as f:
+        with open(pid_filename, "r") as f:
             pid = int(f.read().strip())
     except (IOError, ValueError) as e:
         print(f"Error reading PID file: {e}")
+        os.remove(out_filename)
+        os.remove(err_filename)
         sys.exit(1)
 
     # Check if process is running
@@ -291,13 +305,18 @@ def stop_server(server: str):
         os.kill(pid, 0)  # Check if process exists
     except OSError:
         print("Error: No process found with PID {pid}. Removing stale PID file.")
-        os.remove(pid_file)
+        os.remove(pid_filename)
+        os.remove(out_filename)
+        os.remove(err_filename)
         sys.exit(1)
 
     # Send SIGTERM to stop the server
     try:
         os.kill(pid, signal.SIGTERM)
         print(f"Sent shutdown signal to server (PID: {pid}).")
+        os.remove(pid_filename)
+        os.remove(out_filename)
+        os.remove(err_filename)
     except OSError as e:
         print(f"Error sending shutdown signal: {e}")
         sys.exit(1)
@@ -334,9 +353,8 @@ def daemon_main(args):
         sys.exit(1)
 
 
-def check_existing_server(server: str):
+def check_existing_server(pid_file: str):
     """Check if a server of the given type is already running."""
-    pid_file = f"/tmp/mcp_server_{server}.pid"
     if os.path.exists(pid_file):
         try:
             with open(pid_file, "r") as f:
@@ -344,7 +362,7 @@ def check_existing_server(server: str):
             # Check if process is running
             os.kill(pid, 0)  # Raises OSError if process doesn't exist
             print(
-                f"Error: A {server} server is already running with PID {pid}. Stop it first using 'stop --server {server}'."
+                f"Error: A server is already running with PID {pid}. Stop it first using 'stop --server {{server}}'."
             )
             sys.exit(1)
         except (IOError, ValueError) as e:
@@ -370,6 +388,7 @@ def main():
             "filesystem",
             "brave_search",
             "searxng_search",
+            "tavily_search",
         ],
         required=True,
         help="Type of server to start",
@@ -394,10 +413,12 @@ def main():
             "filesystem",
             "brave_search",
             "searxng_search",
+            "tavily_search",
         ],
         required=True,
         help="Type of server to start",
     )
+    stop_parser.add_argument("--port", type=int, help="Port to stop the server on")
 
     init_parser = subparsers.add_parser("init", help="Stop a running MCP server")
     init_parser.add_argument(
@@ -449,17 +470,23 @@ def main():
     args = parser.parse_args()
 
     if args.command == "start":
-        # Check if a server of this type is already running
-        check_existing_server(args.server)
         if args.detach:
             # Run in daemon mode
-            pidfile = daemon.pidfile.TimeoutPIDLockFile(
-                f"/tmp/mcp_server_{args.server}.pid"
-            )
+            base_file_name = f"mcp_server_{args.server}"
+            if args.port:
+                base_file_name = base_file_name + "_" + str(args.port)
+
+            pid_filename = "/tmp/" + base_file_name + ".pid"
+            out_filename = "/tmp/" + base_file_name + ".out"
+            err_filename = "/tmp/" + base_file_name + ".err"
+
+            check_existing_server(pid_filename)
+
+            pidfile = daemon.pidfile.TimeoutPIDLockFile(pid_filename)
             with daemon.DaemonContext(
                 pidfile=pidfile,
-                stdout=open(f"/tmp/mcp_server_{args.server}.out", "w"),
-                stderr=open(f"/tmp/mcp_server_{args.server}.err", "w"),
+                stdout=open(out_filename, "w"),
+                stderr=open(err_filename, "w"),
                 detach_process=True,
             ):
                 daemon_main(args)
@@ -467,7 +494,7 @@ def main():
             # Run in foreground
             asyncio.run(start_server(args))
     elif args.command == "stop":
-        stop_server(args.server)
+        stop_server(args.server, args.port)
     elif args.command == "init":
         initialize_config(args.subcommand, args.force)
     elif args.command == "run_external_container":

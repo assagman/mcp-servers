@@ -1,9 +1,8 @@
-import shutil
-import tempfile
 import os
 from pathlib import Path
-from typing import Union, List, Dict, cast, Any
+from typing import Union, List, Dict, cast, Any, Optional
 import datetime
+import tempfile
 
 from pydantic import Field, AliasChoices, field_validator, model_validator
 from mcp.server.fastmcp import FastMCP

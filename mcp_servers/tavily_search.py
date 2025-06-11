@@ -197,24 +197,32 @@ class MCPServerTavilySearch(MCPServerHttpBase):
         output_parts = []
 
         if not response.results:
-            return "No content extracted by Tavily."
+            empty_results_err_msg = "No content extracted by Tavily."
+            self.logger.warning(empty_results_err_msg)
+            return empty_results_err_msg
 
-        output_parts.append("Tavily Extraction Results:")
-        for i, item in enumerate(response.results):
-            output_parts.append(f"\n--- Item {i + 1} ---")
-            if isinstance(item, TavilyExtractResultItem):
-                output_parts.append(f"  URL: {item.url}")
-                output_parts.append(
-                    f"  Extracted Content (first 500 chars): {item.content[:500]}..."
-                )
-                if item.images:
-                    output_parts.append(f"  Images: {', '.join(item.images)}")
-            elif isinstance(item, TavilyExtractFailedItem):
-                output_parts.append(f"  URL: {item.url}")
-                output_parts.append(f"  Error: {item.error}")
-            else:  # Should not happen with Pydantic validation
-                output_parts.append("  URL: Unknown (parsing issue)")
-                output_parts.append(f"  Content: Unexpected item type: {type(item)}")
+        try:
+            output_parts.append("Tavily Extraction Results:")
+            for i, item in enumerate(response.results):
+                output_parts.append(f"\n--- Item {i + 1} ---")
+                if isinstance(item, TavilyExtractResultItem):
+                    output_parts.append(f"  URL: {item.url}")
+                    output_parts.append(
+                        f"  Extracted Content: {item.content}"
+                    )
+                    if item.images:
+                        output_parts.append(f"  Images: {', '.join(item.images)}")
+                elif isinstance(item, TavilyExtractFailedItem):
+                    output_parts.append(f"  URL: {item.url}")
+                    output_parts.append(f"  Error: {item.error}")
+                else:  # Should not happen with Pydantic validation
+                    output_parts.append("  URL: Unknown (parsing issue)")
+                    output_parts.append(f"  Content: Unexpected item type: {type(item)}")
+        except Exception as exp:
+            extract_result_parse_err_msg = f"Error while parsing extraction results: {exp}"
+            self.logger.info(extract_result_parse_err_msg)
+            return extract_result_parse_err_msg
+
 
         return "\n".join(output_parts)
 
@@ -319,14 +327,19 @@ class MCPServerTavilySearch(MCPServerHttpBase):
             """
             try:
                 validated_url = HttpUrl(url_to_extract)
+                self.logger.info(f"Extracting URL: {validated_url}")
             except ValueError:
-                return f"Error: Invalid URL format provided: {url_to_extract}"
+                err_msg = f"Error: Invalid URL format provided: {url_to_extract}"f"Error: Invalid URL format provided: {url_to_extract}"
+                self.logger.warning(err_msg)
+                return err_msg
 
             if extract_depth not in [
                 self.SEARCH_DEPTH_BASIC,
                 self.SEARCH_DEPTH_ADVANCED,
             ]:
-                return f"Error: extract_depth must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
+                extract_depth_err_msg = f"Error: extract_depth must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
+                self.logger.warning(extract_depth_err_msg)
+                return extract_depth_err_msg
 
             payload = {
                 "urls": [
@@ -339,9 +352,14 @@ class MCPServerTavilySearch(MCPServerHttpBase):
                 self.TAVILY_EXTRACT_ENDPOINT, payload
             )
 
-            validated_response = TavilyExtractApiResponse.model_validate(
-                response_dict
-            )
+            try:
+                validated_response = TavilyExtractApiResponse.model_validate(
+                    response_dict
+                )
+            except Exception as exp:
+                self.logger.warning(f"TavilyExtractApiResponse.model_validate failed: {exp}")
+                return str(exp)
+
             return self._format_extract_results(validated_response)
 
         @mcp_server.tool()

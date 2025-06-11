@@ -1,4 +1,3 @@
-# mcp_servers/base.py
 import time
 import asyncio
 import logging
@@ -41,12 +40,15 @@ class AbstractMCPServer(ABC):
     rate limiting, and Uvicorn server setup.
     """
 
-    def __init__(self):
+    def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
         """
         Initializes the server. Derived classes are expected to load their
         specific settings in their __init__ and pass them to super().__init__(settings=...).
         Alternatively, this __init__ can call an abstract method to load settings.
         """
+        self.host_override = host
+        self.port_override = port
+
         self.logger = MCPServersLogger.get_logger(__class__.__name__)
 
         self.http_client: Optional[httpx.AsyncClient] = None
@@ -60,7 +62,17 @@ class AbstractMCPServer(ABC):
         }
 
         self._settings = self._load_and_validate_settings()
+        self.override_settings()
+
         self._log_initial_config()
+
+    def override_settings(self):
+        if self.host_override:
+            self._settings.HOST = self.host_override
+
+        if self.port_override:
+            self._settings.PORT = self.port_override
+
 
     @abstractproperty
     def settings(self) -> BaseMCPServerSettings:

@@ -90,6 +90,17 @@ class MCPServerFilesystem(AbstractMCPServer):
     defined in the settings.
     """
 
+    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, allowed_dir: Optional[Path] = None):
+        self.allowed_dir_override = allowed_dir
+        super().__init__(host=host, port=port)
+
+    def override_settings(self):
+        super().override_settings()
+        self._settings = cast(MCPServerFilesystemSettings, self._settings)
+
+        if self.allowed_dir_override:
+            self._settings.ALLOWED_DIRECTORY = self.allowed_dir_override
+
     @property
     def settings(self):
         return cast(MCPServerFilesystemSettings, self._settings)

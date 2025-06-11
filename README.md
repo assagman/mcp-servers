@@ -14,6 +14,7 @@ mcp-servers implements Model-Control-Protocol servers for various integrations:
 - Filesystem access
 - Brave Search integration
 - SearXNG search integration
+- Tavily Search integration
 
 These servers can be used by AI agents to interact with your system and external services in a controlled manner.
 
@@ -134,6 +135,22 @@ mcpserver stop --server searxng_search  # Stop detached server
 mcpserver stop_external_container --container searxng
 ```
 
+##### Tavily Search Server
+
+Requires `TAVILY_API_KEY` environment variable.
+
+```sh
+# Start server
+mcpserver start --server tavily_search
+
+# Custom port
+mcpserver start --server tavily_search --port 8768
+
+# Detached mode
+mcpserver start --server tavily_search --detached
+mcpserver stop --server tavily_search  # Stop detached server
+```
+
 ### Python API
 
 The package can also be imported and used programmatically. See example
@@ -179,6 +196,7 @@ You can run multiple MCP servers simultaneously by specifying different ports:
 mcpserver start --server filesystem --port 8765 --detached
 mcpserver start --server brave_search --port 8766 --detached
 mcpserver start --server searxng_search --port 8767 --detached
+mcpserver start --server tavily_search --port 8768 --detached
 ```
 
 ## Troubleshooting

@@ -1,14 +1,12 @@
 import os
 import asyncio
-from pathlib import Path
-from dotenv import load_dotenv
 
-from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
 from pydantic_ai.mcp import MCPServerHTTP
 
 from mcp_servers import load_env_vars
+from examples.utils import chatify, DEFAULT_MODEL_NAME
+
 
 load_env_vars()
 
@@ -25,14 +23,6 @@ async def main():
     # Instantiate the server
     mcp_server_filesystem = MCPServerHTTP(
         f"http://{os.environ['MCP_SERVER_BRAVE_SEARCH_HOST']}:{os.environ['MCP_SERVER_BRAVE_SEARCH_PORT']}/sse"
-    )
-    #
-    model = OpenAIModel(
-        model_name="google/gemini-2.5-flash-preview-05-20",
-        provider=OpenAIProvider(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.environ["OPENROUTER_API_KEY"],
-        ),
     )
 
     system_prompt = f"""
@@ -52,22 +42,13 @@ async def main():
     """
 
     agent = Agent(
-        model,
+        model=f"openrouter:{DEFAULT_MODEL_NAME}",
         mcp_servers=[mcp_server_filesystem],
         system_prompt=system_prompt,
     )
 
     async with agent.run_mcp_servers():
-        result = None
-        while True:
-            # Call a tool on the server
-            message_history = []
-            if result:
-                message_history = result.all_messages()
-            result = await agent.run(input("[USER]: "), message_history=message_history)
-            print(result.output)
-            print()
-            print()
+        await chatify(agent)
 
 
 if __name__ == "__main__":

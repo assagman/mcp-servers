@@ -1,29 +1,23 @@
 import os
 import asyncio
 
-from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.agent import Agent
 
 from mcp_servers.tavily_search import MCPServerTavilySearch
 from mcp_servers import load_env_vars
+from examples.utils import chatify, DEFAULT_MODEL_NAME
+
 
 load_env_vars()
+
+
+assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
 
 
 async def main():
     # Instantiate the server
     mcp_server_tavily_search = MCPServerTavilySearch()
     _ = await mcp_server_tavily_search.start()
-
-    #
-    model = OpenAIModel(
-        model_name="google/gemini-2.5-flash-preview-05-20",
-        provider=OpenAIProvider(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.environ["OPENROUTER_API_KEY"],
-        ),
-    )
 
     system_prompt = f"""
         You are an tavily search AI agent. You are allowed use MCP tools to perform web search and extraction url content.
@@ -43,44 +37,13 @@ async def main():
     """
 
     agent = Agent(
-        model,
+        model=f"openrouter:{DEFAULT_MODEL_NAME}",
         mcp_servers=[mcp_server_tavily_search.get_mcp_server_http()],
         system_prompt=system_prompt,
     )
 
     async with agent.run_mcp_servers():
-        result = None
-        while True:
-            # Call a tool on the server
-            message_history = []
-            if result:
-                message_history = result.all_messages()
-
-            user_multiline_input = None
-            print("[USER]: \n")
-            while True:
-                line = input()
-                line = line.strip()
-                if line == "!":
-                    break
-                if line == "q!":
-                    import sys
-
-                    sys.exit(0)
-                if user_multiline_input:
-                    user_multiline_input = f"""
-{user_multiline_input}
-{line}
-                    """
-                else:
-                    user_multiline_input = line
-
-            result = await agent.run(
-                user_multiline_input, message_history=message_history
-            )
-            print(result.output)
-            print()
-            print()
+        await chatify(agent)
 
 
 if __name__ == "__main__":

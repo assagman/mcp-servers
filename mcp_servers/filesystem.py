@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Union, List, Dict, cast, Any, Optional
 import datetime
 import tempfile
+import shutil
 
 from pydantic import Field, AliasChoices, field_validator, model_validator
 from mcp.server.fastmcp import FastMCP

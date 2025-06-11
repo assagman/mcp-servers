@@ -56,12 +56,12 @@ class MCPServerBraveSearch(MCPServerHttpBase):
     def _log_initial_config(self):
         super()._log_initial_config()
 
-        self.logger.info("--- MCPServerFilesystem Configuration ---")
+        self.logger.info("--- MCPServerBraveSearch Configuration ---")
         self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
         self.logger.info(f"  HOST:              {self.settings.HOST}")
         self.logger.info(f"  PORT:              {self.settings.PORT}")
         self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
-        self.logger.info("--- End MCPServerFilesystem Configuration ---")
+        self.logger.info("--- End MCPServerBraveSearch Configuration ---")
 
 
     def _get_http_client_config(self) -> Dict[str, Any]:

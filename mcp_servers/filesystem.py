@@ -48,13 +48,17 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
         logger = MCPServersLogger.get_logger()
         if isinstance(v, str):
             try:
-                path = Path(v).expanduser().resolve()
+                if not v: # empty value = tmp folder
+                    path = Path(tempfile.mkdtemp(prefix="mcp_fs_"))
+                else:
+                    path = Path(v).expanduser().resolve()
                 logger.debug(f"Converted string path '{v}' to '{path}'")
                 return path
             except Exception as e:
                 logger.error(f"Error resolving path string '{v}': {e}")
                 raise ValueError(f"Invalid path string for ALLOWED_DIRECTORY: {v}. Error: {e}") from e
         if isinstance(v, Path):
+            logger.info("Given ALLOWED_DIR is Path")
             return v.expanduser().resolve() # Ensure even Path objects are fully resolved
         raise TypeError("ALLOWED_DIRECTORY must be a string or Path object.")
 

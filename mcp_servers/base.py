@@ -49,7 +49,7 @@ class AbstractMCPServer(ABC):
         self.host_override = host
         self.port_override = port
 
-        self.logger = MCPServersLogger.get_logger(__class__.__name__)
+        self.logger = MCPServersLogger.get_logger(self.__class__.__name__)
 
         self.http_client: Optional[httpx.AsyncClient] = None
         self.mcp_server_instance: Optional[FastMCP] = None

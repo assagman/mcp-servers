@@ -81,7 +81,7 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
             logger.error(f"ALLOWED_DIRECTORY '{path}' is not a directory.")
             raise ValueError(f"ALLOWED_DIRECTORY '{path}' must be a directory.")
 
-        logger.info(f"Validated and using ALLOWED_DIRECTORY: {path}")
+        logger.debug(f"Validated and using ALLOWED_DIRECTORY: {path}")
         return self
 
     model_config = BaseMCPServerSettings.model_config

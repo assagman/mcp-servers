@@ -16,7 +16,7 @@ import mcp_servers
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave import MCPServerBrave
 from mcp_servers.searxng import MCPServerSearxng
-from mcp_servers.tavily_search import MCPServerTavilySearch
+from mcp_servers.tavily import MCPServerTavily
 from mcp_servers import (
     DEFAULT_CONFIG_DIR,
     DEFAULT_ENV_FILE,
@@ -254,13 +254,13 @@ async def start_server(args):
                 print("\nServer shutting down...")
                 await server.stop()
                 sys.exit(0)
-        elif args.server == "tavily_search":
+        elif args.server == "tavily":
             if args.host:
-                os.environ["MCP_SERVER_TAVILY_SEARCH_HOST"] = args.host
+                os.environ["MCP_SERVER_TAVILY_HOST"] = args.host
             if args.port:
-                os.environ["MCP_SERVER_TAVILY_SEARCH_PORT"] = str(args.port)
+                os.environ["MCP_SERVER_TAVILY_PORT"] = str(args.port)
 
-            server = MCPServerTavilySearch()
+            server = MCPServerTavily()
             try:
                 server_task = await server.start()
                 await server_task
@@ -388,7 +388,7 @@ def main():
             "filesystem",
             "brave",
             "searxng",
-            "tavily_search",
+            "tavily",
         ],
         required=True,
         help="Type of server to start",
@@ -413,7 +413,7 @@ def main():
             "filesystem",
             "brave",
             "searxng",
-            "tavily_search",
+            "tavily",
         ],
         required=True,
         help="Type of server to start",

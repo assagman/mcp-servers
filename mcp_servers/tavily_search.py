@@ -9,7 +9,7 @@ from mcp_servers.base import MCPServerHttpBase, MCPServerHttpBaseSettings
 from mcp_servers.logger import MCPServersLogger
 
 
-class TavilySearchResultItem(BaseModel):
+class TavilyResultItem(BaseModel):
     title: str
     url: HttpUrl
     content: str
@@ -18,10 +18,10 @@ class TavilySearchResultItem(BaseModel):
     images: Optional[List[str]] = None
 
 
-class TavilySearchApiResponse(BaseModel):
+class TavilyApiResponse(BaseModel):
     query: str
     answer: Optional[str] = None
-    results: List[TavilySearchResultItem] = Field(default_factory=list)
+    results: List[TavilyResultItem] = Field(default_factory=list)
     response_time: Optional[float] = None
     images: Optional[List[str]] = None
 
@@ -114,19 +114,19 @@ class TavilyCrawlApiResponse(BaseModel):
     # Potentially 'failed_results' or error indicators for specific crawled URLs if API supports it
 
 
-class TavilySearchServerSettings(MCPServerHttpBaseSettings):
-    SERVER_NAME: str = "MCP_SERVER_TAVILY_SEARCH"
-    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_TAVILY_SEARCH_HOST"))
-    PORT: int = Field(default=8768, validation_alias=AliasChoices("MCP_SERVER_TAVILY_SEARCH_PORT"))
-    RATE_LIMIT_PER_SECOND: int = Field(default=20, validation_alias=AliasChoices("TAVILY_SEARCH_RATE_LIMIT_PER_SECOND", "MCP_SERVER_TAVILY_SEARCH_RATE_LIMIT_PER_SECOND"))
+class TavilyServerSettings(MCPServerHttpBaseSettings):
+    SERVER_NAME: str = "MCP_SERVER_TAVILY"
+    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_TAVILY_HOST"))
+    PORT: int = Field(default=8768, validation_alias=AliasChoices("MCP_SERVER_TAVILY_PORT"))
+    RATE_LIMIT_PER_SECOND: int = Field(default=20, validation_alias=AliasChoices("TAVILY_RATE_LIMIT_PER_SECOND", "MCP_SERVER_TAVILY_RATE_LIMIT_PER_SECOND"))
     BASE_URL: HttpUrl = Field(default=HttpUrl("https://api.tavily.com"), validation_alias=AliasChoices("TAVILY_API_BASE_URL"))
     TAVILY_API_KEY: str = Field(default_factory=lambda: os.environ["TAVILY_API_KEY"], validation_alias=AliasChoices("TAVILY_API_KEY"))
 
     model_config = MCPServerHttpBaseSettings.model_config
 
 
-class MCPServerTavilySearch(MCPServerHttpBase):
-    TAVILY_SEARCH_ENDPOINT = "/search"
+class MCPServerTavily(MCPServerHttpBase):
+    TAVILY_ENDPOINT = "/search"
     TAVILY_EXTRACT_ENDPOINT = "/extract"
     TAVILY_CRAWL_ENDPOINT = "/crawl"
     SEARCH_DEPTH_BASIC = "basic"
@@ -138,25 +138,25 @@ class MCPServerTavilySearch(MCPServerHttpBase):
     """
     @property
     def settings(self):
-        return cast(TavilySearchServerSettings, self._settings)
+        return cast(TavilyServerSettings, self._settings)
 
-    def _load_and_validate_settings(self) -> TavilySearchServerSettings:
+    def _load_and_validate_settings(self) -> TavilyServerSettings:
         """Load Brave Search specific MCP server settings"""
-        return TavilySearchServerSettings()
+        return TavilyServerSettings()
 
     def _log_initial_config(self):
         super()._log_initial_config()
 
-        self.logger.info("--- MCPServerTavilySearch Configuration ---")
+        self.logger.info("--- MCPServerTavily Configuration ---")
         self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
         self.logger.info(f"  HOST:              {self.settings.HOST}")
         self.logger.info(f"  PORT:              {self.settings.PORT}")
         self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
-        self.logger.info("--- End MCPServerTavilySearch Configuration ---")
+        self.logger.info("--- End MCPServerTavily Configuration ---")
 
     def _get_http_client_config(self) -> Dict[str, Any]:
         """Configures the HTTP client for Brave Search API."""
-        settings: TavilySearchServerSettings = self.settings # type: ignore
+        settings: TavilyServerSettings = self.settings # type: ignore
 
         return {
             "base_url": str(settings.BASE_URL),
@@ -167,7 +167,7 @@ class MCPServerTavilySearch(MCPServerHttpBase):
             },
         }
 
-    def _format_search_results(self, response: TavilySearchApiResponse) -> str:
+    def _format_search_results(self, response: TavilyApiResponse) -> str:
         """Formats Tavily search API response into a human-readable string."""
         output_parts = []
         if response.answer:
@@ -244,7 +244,7 @@ class MCPServerTavilySearch(MCPServerHttpBase):
 
     async def _register_tools(self, mcp_server: FastMCP):
         @mcp_server.tool()
-        async def tavily_search(
+        async def tavily(
             query: str,
             search_depth: str = self.SEARCH_DEPTH_BASIC,
             include_answer: bool = False,
@@ -301,9 +301,9 @@ class MCPServerTavilySearch(MCPServerHttpBase):
                 payload["days_published_ago"] = days_published_ago
 
             response_dict = await self._make_post_request_with_retry(
-                self.TAVILY_SEARCH_ENDPOINT, payload
+                self.TAVILY_ENDPOINT, payload
             )
-            validated_response = TavilySearchApiResponse.model_validate(
+            validated_response = TavilyApiResponse.model_validate(
                 response_dict
             )
             return self._format_search_results(validated_response)

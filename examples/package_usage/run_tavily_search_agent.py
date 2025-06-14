@@ -3,7 +3,7 @@ import asyncio
 
 from pydantic_ai.agent import Agent
 
-from mcp_servers.tavily_search import MCPServerTavilySearch
+from mcp_servers.tavily import MCPServerTavily
 from mcp_servers import load_env_vars
 from examples.utils import chatify, DEFAULT_MODEL_NAME
 
@@ -16,8 +16,8 @@ assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined
 
 async def main():
     # Instantiate the server
-    mcp_server_tavily_search = MCPServerTavilySearch()
-    _ = await mcp_server_tavily_search.start()
+    mcp_server_tavily = MCPServerTavily()
+    _ = await mcp_server_tavily.start()
 
     system_prompt = f"""
         You are an tavily search AI agent. You are allowed use MCP tools to perform web search and extraction url content.
@@ -38,7 +38,7 @@ async def main():
 
     agent = Agent(
         model=f"openrouter:{DEFAULT_MODEL_NAME}",
-        mcp_servers=[mcp_server_tavily_search.get_mcp_server_http()],
+        mcp_servers=[mcp_server_tavily.get_mcp_server_http()],
         system_prompt=system_prompt,
     )
 

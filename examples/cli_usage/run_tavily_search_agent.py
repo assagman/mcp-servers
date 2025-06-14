@@ -12,16 +12,16 @@ load_env_vars()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
-if not os.environ.get("MCP_SERVER_TAVILY_SEARCH_HOST"):
-    os.environ["MCP_SERVER_TAVILY_SEARCH_HOST"] = "0.0.0.0"
-if not os.environ.get("MCP_SERVER_TAVILY_SEARCH_PORT"):
-    os.environ["MCP_SERVER_TAVILY_SEARCH_PORT"] = "8767"
+if not os.environ.get("MCP_SERVER_TAVILY_HOST"):
+    os.environ["MCP_SERVER_TAVILY_HOST"] = "0.0.0.0"
+if not os.environ.get("MCP_SERVER_TAVILY_PORT"):
+    os.environ["MCP_SERVER_TAVILY_PORT"] = "8767"
 
 
 async def main():
     # Instantiate the server
-    mcp_server_tavily_search = MCPServerHTTP(
-        f"http://{os.environ['MCP_SERVER_TAVILY_SEARCH_HOST']}:{os.environ['MCP_SERVER_TAVILY_SEARCH_PORT']}/sse"
+    mcp_server_tavily = MCPServerHTTP(
+        f"http://{os.environ['MCP_SERVER_TAVILY_HOST']}:{os.environ['MCP_SERVER_TAVILY_PORT']}/sse"
     )
 
     system_prompt = f"""
@@ -44,7 +44,7 @@ async def main():
 
     agent = Agent(
         model=f"openrouter:{DEFAULT_MODEL_NAME}",
-        mcp_servers=[mcp_server_tavily_search],
+        mcp_servers=[mcp_server_tavily],
         system_prompt=system_prompt,
     )
 

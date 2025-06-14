@@ -7,7 +7,7 @@ from pydantic_ai.agent import Agent
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave import MCPServerBrave
 from mcp_servers.searxng import MCPServerSearxng
-from mcp_servers.tavily_search import MCPServerTavilySearch
+from mcp_servers.tavily import MCPServerTavily
 
 from mcp_servers import load_env_vars
 from examples.utils import chatify, DEFAULT_MODEL_NAME
@@ -29,8 +29,8 @@ async def main():
     mcp_server_searxng = MCPServerSearxng(host="localhost", port=8002)
     _ = await mcp_server_searxng.start()
 
-    mcp_server_tavily_search = MCPServerTavilySearch(host="localhost", port=8003)
-    _ = await mcp_server_tavily_search.start()
+    mcp_server_tavily = MCPServerTavily(host="localhost", port=8003)
+    _ = await mcp_server_tavily.start()
 
     system_prompt = """
     """
@@ -41,7 +41,7 @@ async def main():
             mcp_server_filesystem.get_mcp_server_http(),
             mcp_server_brave.get_mcp_server_http(),
             mcp_server_searxng.get_mcp_server_http(),
-            mcp_server_tavily_search.get_mcp_server_http(),
+            mcp_server_tavily.get_mcp_server_http(),
         ],
         system_prompt=system_prompt,
     )

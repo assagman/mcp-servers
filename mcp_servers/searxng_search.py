@@ -42,7 +42,7 @@ class SearXNGServerSettings(MCPServerHttpBaseSettings):
     BASE_URL: HttpUrl = Field(default=HttpUrl("http://0.0.0.0:8001"), validation_alias=AliasChoices("SEARXNG_BASE_URL"))
     # USERNAME: Optional[str] = Field(default=None, validation_alias=AliasChoices("SEARXNG_USERNAME", "MCP_SERVER_SEARXNG_USERNAME"))
     # PASSWORD: Optional[str] = Field(default=None, validation_alias=AliasChoices("SEARXNG_PASSWORD", "MCP_SERVER_SEARXNG_PASSWORD"))
-    RATE_LIMIT_PER_SECOND: int = Field(default=20, validation_alias=AliasChoices("SEARXNG_SEARCH_RATE_LIMIT_PER_SECOND", "MCP_SERVER_SEARXNG_SEARCH_RATE_LIMIT_PER_SECOND"))
+    RATE_LIMIT_PER_SECOND: int | None = Field(default=20, validation_alias=AliasChoices("SEARXNG_SEARCH_RATE_LIMIT_PER_SECOND", "MCP_SERVER_SEARXNG_SEARCH_RATE_LIMIT_PER_SECOND"))
 
     model_config = MCPServerHttpBaseSettings.model_config
 

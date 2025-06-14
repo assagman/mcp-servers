@@ -36,7 +36,7 @@ class BraveSearchServerSettings(MCPServerHttpBaseSettings):
     SERVER_NAME: str = "MCP_SERVER_BRAVE_SEARCH"
     HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_BRAVE_SEARCH_HOST"))
     PORT: int = Field(default=8766, validation_alias=AliasChoices("MCP_SERVER_BRAVE_SEARCH_PORT"))
-    RATE_LIMIT_PER_SECOND: int = Field(default=20, validation_alias=AliasChoices("BRAVE_SEARCH_RATE_LIMIT_PER_SECOND", "MCP_SERVER_BRAVE_SEARCH_RATE_LIMIT_PER_SECOND"))
+    RATE_LIMIT_PER_SECOND: int | None = Field(default=20, validation_alias=AliasChoices("BRAVE_SEARCH_RATE_LIMIT_PER_SECOND", "MCP_SERVER_BRAVE_SEARCH_RATE_LIMIT_PER_SECOND"))
     BASE_URL: HttpUrl = Field(default=HttpUrl("https://api.search.brave.com/res/v1"), validation_alias=AliasChoices("BRAVE_API_BASE_URL"))
     BRAVE_API_KEY: str = Field(default_factory=lambda: os.environ["BRAVE_API_KEY"], validation_alias=AliasChoices("BRAVE_API_KEY"))
 
@@ -76,7 +76,7 @@ class MCPServerBraveSearch(MCPServerHttpBase):
                 "X-Subscription-Token": settings.BRAVE_API_KEY,
             },
         }
-#
+
     async def _perform_web_search(
         self,
         query: str,

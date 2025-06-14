@@ -5,7 +5,7 @@ from pathlib import Path
 from pydantic_ai.agent import Agent
 
 from mcp_servers.filesystem import MCPServerFilesystem
-from mcp_servers.brave_search import MCPServerBraveSearch
+from mcp_servers.brave import MCPServerBrave
 from mcp_servers.searxng_search import MCPServerSearxngSearch
 from mcp_servers.tavily_search import MCPServerTavilySearch
 
@@ -23,8 +23,8 @@ async def main():
     mcp_server_filesystem = MCPServerFilesystem(host="localhost", port=8000, allowed_dir=Path.cwd())
     _ = await mcp_server_filesystem.start()
 
-    mcp_server_brave_search = MCPServerBraveSearch(host="localhost", port=8001)
-    _ = await mcp_server_brave_search.start()
+    mcp_server_brave = MCPServerBrave(host="localhost", port=8001)
+    _ = await mcp_server_brave.start()
 
     mcp_server_searxng_search = MCPServerSearxngSearch(host="localhost", port=8002)
     _ = await mcp_server_searxng_search.start()
@@ -39,7 +39,7 @@ async def main():
         model=f"openrouter:{DEFAULT_MODEL_NAME}",
         mcp_servers=[
             mcp_server_filesystem.get_mcp_server_http(),
-            mcp_server_brave_search.get_mcp_server_http(),
+            mcp_server_brave.get_mcp_server_http(),
             mcp_server_searxng_search.get_mcp_server_http(),
             mcp_server_tavily_search.get_mcp_server_http(),
         ],

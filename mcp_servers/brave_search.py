@@ -32,41 +32,41 @@ class BraveWebResponse(BaseModel):
     locations: Optional[LocationHeaders] = None
 
 
-class BraveSearchServerSettings(MCPServerHttpBaseSettings):
-    SERVER_NAME: str = "MCP_SERVER_BRAVE_SEARCH"
-    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_BRAVE_SEARCH_HOST"))
-    PORT: int = Field(default=8766, validation_alias=AliasChoices("MCP_SERVER_BRAVE_SEARCH_PORT"))
-    RATE_LIMIT_PER_SECOND: int | None = Field(default=20, validation_alias=AliasChoices("BRAVE_SEARCH_RATE_LIMIT_PER_SECOND", "MCP_SERVER_BRAVE_SEARCH_RATE_LIMIT_PER_SECOND"))
+class BraveServerSettings(MCPServerHttpBaseSettings):
+    SERVER_NAME: str = "MCP_SERVER_BRAVE"
+    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_BRAVE_HOST"))
+    PORT: int = Field(default=8766, validation_alias=AliasChoices("MCP_SERVER_BRAVE_PORT"))
+    RATE_LIMIT_PER_SECOND: int | None = Field(default=20, validation_alias=AliasChoices("BRAVE_RATE_LIMIT_PER_SECOND", "MCP_SERVER_BRAVE_RATE_LIMIT_PER_SECOND"))
     BASE_URL: HttpUrl = Field(default=HttpUrl("https://api.search.brave.com/res/v1"), validation_alias=AliasChoices("BRAVE_API_BASE_URL"))
     BRAVE_API_KEY: str = Field(default_factory=lambda: os.environ["BRAVE_API_KEY"], validation_alias=AliasChoices("BRAVE_API_KEY"))
 
     model_config = MCPServerHttpBaseSettings.model_config
 
 
-class MCPServerBraveSearch(MCPServerHttpBase):
+class MCPServerBrave(MCPServerHttpBase):
 
     @property
     def settings(self):
-        return cast(BraveSearchServerSettings, self._settings)
+        return cast(BraveServerSettings, self._settings)
 
-    def _load_and_validate_settings(self) -> BraveSearchServerSettings:
+    def _load_and_validate_settings(self) -> BraveServerSettings:
         """Load Brave Search specific MCP server settings"""
-        return BraveSearchServerSettings()
+        return BraveServerSettings()
 
     def _log_initial_config(self):
         super()._log_initial_config()
 
-        self.logger.info("--- MCPServerBraveSearch Configuration ---")
+        self.logger.info("--- MCPServerBrave Configuration ---")
         self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
         self.logger.info(f"  HOST:              {self.settings.HOST}")
         self.logger.info(f"  PORT:              {self.settings.PORT}")
         self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
-        self.logger.info("--- End MCPServerBraveSearch Configuration ---")
+        self.logger.info("--- End MCPServerBrave Configuration ---")
 
 
     def _get_http_client_config(self) -> Dict[str, Any]:
         """Configures the HTTP client for Brave Search API."""
-        settings: BraveSearchServerSettings = self.settings # type: ignore
+        settings: BraveServerSettings = self.settings # type: ignore
 
         return {
             "base_url": str(settings.BASE_URL),
@@ -124,7 +124,7 @@ class MCPServerBraveSearch(MCPServerHttpBase):
         return "\n\n".join(results_str) if results_str else "No web results found."
 
     async def _register_tools(self, mcp_server: FastMCP):
-        """Registers the brave_search tool."""
+        """Registers the brave tool."""
         @mcp_server.tool()
         async def brave_web_search(query: str, count: int = 10, offset: int = 0, search_lang: str = "en", freshness: str = "") -> str:
             """

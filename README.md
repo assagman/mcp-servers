@@ -103,14 +103,14 @@ Requires `BRAVE_API_KEY` environment variable.
 
 ```sh
 # Start server
-mcpserver start --server brave_search
+mcpserver start --server brave
 
 # Custom port
-mcpserver start --server brave_search --port 8766
+mcpserver start --server brave --port 8766
 
 # Detached mode
-mcpserver start --server brave_search --detached
-mcpserver stop --server brave_search  # Stop detached server
+mcpserver start --server brave --detached
+mcpserver stop --server brave  # Stop detached server
 ```
 
 ##### SearXNG Search Server
@@ -194,7 +194,7 @@ You can run multiple MCP servers simultaneously by specifying different ports:
 
 ```sh
 mcpserver start --server filesystem --port 8765 --detached
-mcpserver start --server brave_search --port 8766 --detached
+mcpserver start --server brave --port 8766 --detached
 mcpserver start --server searxng_search --port 8767 --detached
 mcpserver start --server tavily_search --port 8768 --detached
 ```

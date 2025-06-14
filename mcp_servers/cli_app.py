@@ -14,7 +14,7 @@ import signal
 
 import mcp_servers
 from mcp_servers.filesystem import MCPServerFilesystem
-from mcp_servers.brave_search import MCPServerBraveSearch
+from mcp_servers.brave import MCPServerBrave
 from mcp_servers.searxng_search import MCPServerSearxngSearch
 from mcp_servers.tavily_search import MCPServerTavilySearch
 from mcp_servers import (
@@ -222,15 +222,15 @@ async def start_server(args):
                 print("\nServer shutting down...")
                 await server.stop()
                 sys.exit(0)
-        elif args.server == "brave_search":
+        elif args.server == "brave":
             assert os.getenv("BRAVE_API_KEY"), "BRAVE_API_KEY must be set"
 
             if args.host:
-                os.environ["MCP_SERVER_BRAVE_SEARCH_HOST"] = args.host
+                os.environ["MCP_SERVER_BRAVE_HOST"] = args.host
             if args.port:
-                os.environ["MCP_SERVER_BRAVE_SEARCH_PORT"] = str(args.port)
+                os.environ["MCP_SERVER_BRAVE_PORT"] = str(args.port)
 
-            server = MCPServerBraveSearch()
+            server = MCPServerBrave()
             try:
                 server_task = await server.start()
                 await server_task
@@ -386,7 +386,7 @@ def main():
         "--server",
         choices=[
             "filesystem",
-            "brave_search",
+            "brave",
             "searxng_search",
             "tavily_search",
         ],
@@ -411,7 +411,7 @@ def main():
         "--server",
         choices=[
             "filesystem",
-            "brave_search",
+            "brave",
             "searxng_search",
             "tavily_search",
         ],

@@ -3,7 +3,7 @@ import asyncio
 import logging
 import httpx
 import uvicorn
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -74,7 +74,8 @@ class AbstractMCPServer(ABC):
             self._settings.PORT = self.port_override
 
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def settings(self) -> BaseMCPServerSettings:
         return self._settings
 

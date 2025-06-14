@@ -3,7 +3,7 @@ import asyncio
 
 from pydantic_ai.agent import Agent
 
-from mcp_servers.searxng_search import MCPServerSearxngSearch
+from mcp_servers.searxng import MCPServerSearxng
 from mcp_servers import load_env_vars
 from examples.utils import chatify, DEFAULT_MODEL_NAME
 
@@ -15,8 +15,8 @@ assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined
 
 
 async def main():
-    mcp_server_searxng_search = MCPServerSearxngSearch()
-    _ = await mcp_server_searxng_search.start()
+    mcp_server_searxng = MCPServerSearxng()
+    _ = await mcp_server_searxng.start()
 
     system_prompt = f"""
         You are an searxng search AI agent. You are allowed use MCP tools to perform web search.
@@ -36,7 +36,7 @@ async def main():
 
     agent = Agent(
         model=f"openrouter:{DEFAULT_MODEL_NAME}",
-        mcp_servers=[mcp_server_searxng_search.get_mcp_server_http()],
+        mcp_servers=[mcp_server_searxng.get_mcp_server_http()],
         system_prompt=system_prompt,
     )
 

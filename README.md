@@ -122,14 +122,14 @@ Requires `SEARXNG_BASE_URL` environment variable.
 mcpserver run_external_container --container searxng
 
 # Start server
-mcpserver start --server searxng_search
+mcpserver start --server searxng
 
 # Custom port
-mcpserver start --server searxng_search --port 8767
+mcpserver start --server searxng --port 8767
 
 # Detached mode
-mcpserver start --server searxng_search --detached
-mcpserver stop --server searxng_search  # Stop detached server
+mcpserver start --server searxng --detached
+mcpserver stop --server searxng  # Stop detached server
 
 # Stop SearXNG container
 mcpserver stop_external_container --container searxng
@@ -195,7 +195,7 @@ You can run multiple MCP servers simultaneously by specifying different ports:
 ```sh
 mcpserver start --server filesystem --port 8765 --detached
 mcpserver start --server brave --port 8766 --detached
-mcpserver start --server searxng_search --port 8767 --detached
+mcpserver start --server searxng --port 8767 --detached
 mcpserver start --server tavily_search --port 8768 --detached
 ```
 

@@ -12,15 +12,15 @@ load_env_vars()
 
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
-if not os.environ.get("MCP_SERVER_SEARXNG_SEARCH_HOST"):
-    os.environ["MCP_SERVER_SEARXNG_SEARCH_HOST"] = "0.0.0.0"
-if not os.environ.get("MCP_SERVER_SEARXNG_SEARCH_PORT"):
-    os.environ["MCP_SERVER_SEARXNG_SEARCH_PORT"] = "8767"
+if not os.environ.get("MCP_SERVER_SEARXNG_HOST"):
+    os.environ["MCP_SERVER_SEARXNG_HOST"] = "0.0.0.0"
+if not os.environ.get("MCP_SERVER_SEARXNG_PORT"):
+    os.environ["MCP_SERVER_SEARXNG_PORT"] = "8767"
 
 
 async def main():
-    mcp_server_searxng_search = MCPServerHTTP(
-        f"http://{os.environ['MCP_SERVER_SEARXNG_SEARCH_HOST']}:{os.environ['MCP_SERVER_SEARXNG_SEARCH_PORT']}/sse"
+    mcp_server_searxng = MCPServerHTTP(
+        f"http://{os.environ['MCP_SERVER_SEARXNG_HOST']}:{os.environ['MCP_SERVER_SEARXNG_PORT']}/sse"
     )
 
     system_prompt = f"""
@@ -41,7 +41,7 @@ async def main():
 
     agent = Agent(
         model=f"openrouter:{DEFAULT_MODEL_NAME}",
-        mcp_servers=[mcp_server_searxng_search],
+        mcp_servers=[mcp_server_searxng],
         system_prompt=system_prompt,
     )
 

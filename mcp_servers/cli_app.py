@@ -15,7 +15,7 @@ import signal
 import mcp_servers
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave import MCPServerBrave
-from mcp_servers.searxng_search import MCPServerSearxngSearch
+from mcp_servers.searxng import MCPServerSearxng
 from mcp_servers.tavily_search import MCPServerTavilySearch
 from mcp_servers import (
     DEFAULT_CONFIG_DIR,
@@ -238,15 +238,15 @@ async def start_server(args):
                 print("\nServer shutting down...")
                 await server.stop()
                 sys.exit(0)
-        elif args.server == "searxng_search":
+        elif args.server == "searxng":
             assert os.getenv("SEARXNG_BASE_URL"), "SEARXNG_BASE_URL must be set"
 
             if args.host:
-                os.environ["MCP_SERVER_SEARXNG_SEARCH_HOST"] = args.host
+                os.environ["MCP_SERVER_SEARXNG_HOST"] = args.host
             if args.port:
-                os.environ["MCP_SERVER_SEARXNG_SEARCH_PORT"] = str(args.port)
+                os.environ["MCP_SERVER_SEARXNG_PORT"] = str(args.port)
 
-            server = MCPServerSearxngSearch()
+            server = MCPServerSearxng()
             try:
                 server_task = await server.start()
                 await server_task
@@ -387,7 +387,7 @@ def main():
         choices=[
             "filesystem",
             "brave",
-            "searxng_search",
+            "searxng",
             "tavily_search",
         ],
         required=True,
@@ -412,7 +412,7 @@ def main():
         choices=[
             "filesystem",
             "brave",
-            "searxng_search",
+            "searxng",
             "tavily_search",
         ],
         required=True,

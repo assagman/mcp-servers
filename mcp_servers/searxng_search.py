@@ -35,19 +35,19 @@ class SearXNGResponse(BaseModel):
     unresponsive_engines: List[List[Any]] = Field(default_factory=list)
 
 class SearXNGServerSettings(MCPServerHttpBaseSettings):
-    SERVER_NAME: str = "MCP_SERVER_SEARXNG_SEARCH"
-    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_SEARXNG_SEARCH_HOST"))
-    PORT: int = Field(default=8767, validation_alias=AliasChoices("MCP_SERVER_SEARXNG_SEARCH_PORT"))
+    SERVER_NAME: str = "MCP_SERVER_SEARXNG"
+    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_SEARXNG_HOST"))
+    PORT: int = Field(default=8767, validation_alias=AliasChoices("MCP_SERVER_SEARXNG_PORT"))
 
     BASE_URL: HttpUrl = Field(default=HttpUrl("http://0.0.0.0:8001"), validation_alias=AliasChoices("SEARXNG_BASE_URL"))
     # USERNAME: Optional[str] = Field(default=None, validation_alias=AliasChoices("SEARXNG_USERNAME", "MCP_SERVER_SEARXNG_USERNAME"))
     # PASSWORD: Optional[str] = Field(default=None, validation_alias=AliasChoices("SEARXNG_PASSWORD", "MCP_SERVER_SEARXNG_PASSWORD"))
-    RATE_LIMIT_PER_SECOND: int | None = Field(default=20, validation_alias=AliasChoices("SEARXNG_SEARCH_RATE_LIMIT_PER_SECOND", "MCP_SERVER_SEARXNG_SEARCH_RATE_LIMIT_PER_SECOND"))
+    RATE_LIMIT_PER_SECOND: int | None = Field(default=20, validation_alias=AliasChoices("SEARXNG_RATE_LIMIT_PER_SECOND", "MCP_SERVER_SEARXNG_RATE_LIMIT_PER_SECOND"))
 
     model_config = MCPServerHttpBaseSettings.model_config
 
 
-class MCPServerSearxngSearch(MCPServerHttpBase):
+class MCPServerSearxng(MCPServerHttpBase):
 
     @property
     def settings(self):
@@ -60,12 +60,12 @@ class MCPServerSearxngSearch(MCPServerHttpBase):
     def _log_initial_config(self):
         super()._log_initial_config()
 
-        self.logger.info("--- MCPServerSearxngSearch Configuration ---")
+        self.logger.info("--- MCPServerSearxng Configuration ---")
         self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
         self.logger.info(f"  HOST:              {self.settings.HOST}")
         self.logger.info(f"  PORT:              {self.settings.PORT}")
         self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
-        self.logger.info("--- End MCPServerSearxngSearch Configuration ---")
+        self.logger.info("--- End MCPServerSearxng Configuration ---")
 
     def _get_http_client_config(self) -> Dict[str, Any]:
         """Configures the HTTP client for SearXNG."""
@@ -150,9 +150,9 @@ class MCPServerSearxngSearch(MCPServerHttpBase):
 
 
     async def _register_tools(self, mcp_server: FastMCP) -> None:
-        """Registers the searxng_search tool."""
+        """Registers the searxng tool."""
         @mcp_server.tool()
-        async def searxng_search(
+        async def searxng(
             query: str,
             pageno: int = 1,
             categories: Optional[str] = None,
@@ -184,14 +184,14 @@ class MCPServerSearxngSearch(MCPServerHttpBase):
                 # Here, `str` is not shadowed.
                 return await self._perform_search(query, pageno, categories, language)
             except MCPUpstreamServiceError as e:
-                self.logger.error(f"Upstream service error in searxng_search for query '{query}': {e}")
+                self.logger.error(f"Upstream service error in searxng for query '{query}': {e}")
                 return f"Error: Search failed due to an issue with the SearXNG service. Status: {e.status_code or 'N/A'}. Details: {e}"
             except MCPRateLimitError as e:
-                self.logger.warning(f"Rate limit hit in searxng_search for query '{query}': {e}")
+                self.logger.warning(f"Rate limit hit in searxng for query '{query}': {e}")
                 return f"Error: Client-side rate limit hit. Please try again shortly. {e}"
             except ValueError as e: # From input validation
-                 self.logger.warning(f"Validation error in searxng_search for query '{query}': {e}")
+                 self.logger.warning(f"Validation error in searxng for query '{query}': {e}")
                  return f"Error: Invalid input provided. {e}"
             except Exception as e:
-                self.logger.error(f"Unexpected error in searxng_search tool for query '{query}': {e}")
+                self.logger.error(f"Unexpected error in searxng tool for query '{query}': {e}")
                 return f"Error: An unexpected error occurred during search. Please check server logs. Type: {type(e).__name__}"

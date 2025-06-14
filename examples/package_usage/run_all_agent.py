@@ -6,7 +6,7 @@ from pydantic_ai.agent import Agent
 
 from mcp_servers.filesystem import MCPServerFilesystem
 from mcp_servers.brave import MCPServerBrave
-from mcp_servers.searxng_search import MCPServerSearxngSearch
+from mcp_servers.searxng import MCPServerSearxng
 from mcp_servers.tavily_search import MCPServerTavilySearch
 
 from mcp_servers import load_env_vars
@@ -26,8 +26,8 @@ async def main():
     mcp_server_brave = MCPServerBrave(host="localhost", port=8001)
     _ = await mcp_server_brave.start()
 
-    mcp_server_searxng_search = MCPServerSearxngSearch(host="localhost", port=8002)
-    _ = await mcp_server_searxng_search.start()
+    mcp_server_searxng = MCPServerSearxng(host="localhost", port=8002)
+    _ = await mcp_server_searxng.start()
 
     mcp_server_tavily_search = MCPServerTavilySearch(host="localhost", port=8003)
     _ = await mcp_server_tavily_search.start()
@@ -40,7 +40,7 @@ async def main():
         mcp_servers=[
             mcp_server_filesystem.get_mcp_server_http(),
             mcp_server_brave.get_mcp_server_http(),
-            mcp_server_searxng_search.get_mcp_server_http(),
+            mcp_server_searxng.get_mcp_server_http(),
             mcp_server_tavily_search.get_mcp_server_http(),
         ],
         system_prompt=system_prompt,

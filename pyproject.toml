@@ -14,9 +14,12 @@ exclude = [
     ".gitignore",
 ]
 
+[tool.hatch.version]
+path = "mcp_servers/__init__.py"
+
 [project]
 name = "mcp_servers"
-version = "0.1.7"
+dynamic = ["version"]
 authors = [
     { name = "Sercan Sagman", email = "sercan@sagmans.com" }
 ]

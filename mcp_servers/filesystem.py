@@ -4,6 +4,7 @@ from typing import Union, List, Dict, cast, Any, Optional
 import datetime
 import tempfile
 import shutil
+import subprocess
 
 from pydantic import Field, AliasChoices, field_validator, model_validator
 from mcp.server.fastmcp import FastMCP
@@ -189,12 +190,13 @@ class MCPServerFilesystem(AbstractMCPServer):
         """Registers filesystem tools with the FastMCP server instance."""
         self.logger.info(f"Registering tools for {self.settings.SERVER_NAME}...")
 
-        @mcp_server.tool()
+        @mcp_server.tool(description="Get current working directory, CWD")
         async def get_working_directory() -> str:
             """
             Returns the absolute path to the current working directory for file operations.
             All operations are sandboxed to this directory and its subdirectories.
             """
+            self.logger.info(f"Getting current working directory")
             return str(self.settings.ALLOWED_DIRECTORY)
 
         @mcp_server.tool()
@@ -210,6 +212,8 @@ class MCPServerFilesystem(AbstractMCPServer):
                 A list of dictionaries, each with 'name' and 'type' ('file' or 'directory'),
                 or an error string if the operation fails.
             """
+            self.logger.info(f"Listing contents of directory: {path}")
+
             try:
                 target_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not target_path.exists():
@@ -235,6 +239,76 @@ class MCPServerFilesystem(AbstractMCPServer):
                 return f"{ERROR_PREFIX}Could not list directory '{path}': {e}"
 
         @mcp_server.tool()
+        def find_file_in_project(filename: str):
+            self.logger.info(f"Finding file: {filename}")
+            exclude_directories = [
+                ".venv",
+                "__pycache__",
+                "node_modules",
+            ]
+            for root, _, files in os.walk(self.settings.ALLOWED_DIRECTORY):
+                skip_dir = False
+                for excluded_dir in exclude_directories:
+                    if excluded_dir in root:
+                        skip_dir = True
+
+                if skip_dir:
+                    continue
+
+                if filename in files:
+                    return os.path.join(root, filename)
+            return None
+
+        @mcp_server.tool()
+        def get_files_containing_text(text: str):
+            cmd = ["rg", "-il", text, str(Path(self.settings.ALLOWED_DIRECTORY).expanduser())]
+            try:
+                completed = subprocess.run(
+                    cmd,
+                    check=True,
+                    text=True,
+                    capture_output=True
+                )
+            except FileNotFoundError as exc:
+                raise RuntimeError("ripgrep (rg) is not installed or not in PATH") from exc
+            except subprocess.CalledProcessError as exc:
+                # ripgrep returns exit-code 1 when it finds **no** matches.
+                if exc.returncode == 1:
+                    return []
+                raise
+
+            # stdout is one path per line.
+            return [str(Path(line)) for line in completed.stdout.splitlines()]
+
+        @mcp_server.tool(description="Get directory tree")
+        def get_directory_tree_command(
+                exclude_dirs=[
+                    ".venv",
+                    "__pycache__",
+                    "node_modules",
+                ],
+                max_depth=None,
+        ):
+            command = ["tree"]
+            if exclude_dirs:
+                # Join exclusion patterns with | for regex
+                exclude_pattern = "|".join(exclude_dirs)
+                command.extend(["-I", exclude_pattern])
+            if max_depth:
+                command.extend(["-L", str(max_depth)])
+
+            command.extend([str(self.settings.ALLOWED_DIRECTORY)])
+
+            try:
+                print(command)
+                result = subprocess.run(command, capture_output=True, text=True, check=True)
+                return result.stdout
+            except subprocess.CalledProcessError as e:
+                return f"Error running tree command: {e}\n{e.stderr}"
+            except FileNotFoundError:
+                return "Error: 'tree' command not found. Please install it."
+
+        @mcp_server.tool()
         async def read_file(path: str) -> str:
             """
             Reads the content of a file at the given path, relative to the allowed working directory.
@@ -245,6 +319,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 The content of the file as a string, or an error string if the operation fails.
             """
+            self.logger.info(f"Reading file: {path}")
             try:
                 file_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not file_path.exists():

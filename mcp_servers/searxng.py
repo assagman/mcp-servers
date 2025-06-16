@@ -12,11 +12,12 @@ class SearXNGResult(BaseModel):
     url: HttpUrl
     title: str
     content: Optional[str] = None
-    engine: Optional[str] = None
-    template: Optional[str] = None
-    category: Optional[str] = None
-    img_src: Optional[str] = None
     thumbnail: Optional[str] = None
+    engine: Optional[str] = None
+    parsed_url: Optional[List[str]] = None
+    img_src: Optional[str] = None
+    score: Optional[float] = None
+    category: Optional[str] = None
 
 class SearXNGInfobox(BaseModel):
     infobox: Optional[str] = None
@@ -115,6 +116,8 @@ class MCPServerSearxng(MCPServerHttpBase):
                     res_parts.append(f"  Category: {result.category}")
                 if result.thumbnail:
                     res_parts.append(f"  Thumbnail: {result.thumbnail}")
+                if result.score:
+                    res_parts.append(f"  Score: {result.score}")
                 output_parts.append("\n".join(res_parts))
         if data.suggestions:
             output_parts.append("\n--- Suggestions ---")
@@ -151,6 +154,7 @@ class MCPServerSearxng(MCPServerHttpBase):
 
     async def _register_tools(self, mcp_server: FastMCP) -> None:
         """Registers the searxng tool."""
+
         @mcp_server.tool()
         async def searxng(
             query: str,

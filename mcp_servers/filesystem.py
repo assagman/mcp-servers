@@ -107,7 +107,12 @@ class MCPServerFilesystem(AbstractMCPServer):
     defined in the settings.
     """
 
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, allowed_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        allowed_dir: Optional[Path] = None,
+    ):
         self.allowed_dir_override = allowed_dir
         super().__init__(host=host, port=port)
 
@@ -180,18 +185,23 @@ class MCPServerFilesystem(AbstractMCPServer):
         except Exception as e:
             self.logger.warning(
                 f"Path resolution failed for '{relative_path_str}' "
-                f"against '{allowed_dir}': {e}", exc_info=True
+                f"against '{allowed_dir}': {e}",
+                exc_info=True,
             )
             raise ValueError(
                 f"{ERROR_PREFIX}Invalid path specified: '{relative_path_str}'. Error: {e}"
             ) from e
+
 
         # Final security check: The resolved path must be the allowed_dir itself or a descendant.
         # Path.is_relative_to() was added in Python 3.9.
         # For older Pythons, a common alternative is:
         # `allowed_dir.resolve() in prospective_path.resolve().parents` or string prefix matching.
         # However, `is_relative_to` is more robust.
-        if not (prospective_path == allowed_dir or prospective_path.is_relative_to(allowed_dir)):
+        if not (
+            prospective_path == allowed_dir
+            or prospective_path.is_relative_to(allowed_dir)
+        ):
             raise ValueError(
                 f"{ERROR_PREFIX}Operation on path '{prospective_path}' is not allowed. "
                 f"Paths must be within the sandboxed directory: '{allowed_dir}'."
@@ -212,7 +222,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             return str(self.settings.ALLOWED_DIRECTORY)
 
         @mcp_server.tool()
-        async def list_directory(path: str = ".") -> Union[List[Dict[str, str]], str]:
+        async def list_directory(path: str = str(self.settings.ALLOWED_DIRECTORY)) -> Union[List[Dict[str, str]], str]:
             """
             Lists files and directories at the given path, relative to the allowed working directory.
 
@@ -241,13 +251,19 @@ class MCPServerFilesystem(AbstractMCPServer):
                             "type": "directory" if item.is_dir() else "file",
                         }
                     )
-                self.logger.debug(f"Listed directory '{target_path}', found {len(entries)} items.")
+                self.logger.debug(
+                    f"Listed directory '{target_path}', found {len(entries)} items."
+                )
                 return entries
-            except ValueError as e: # From _resolve_path_and_ensure_within_allowed
-                self.logger.warning(f"ValueError in list_directory for path '{path}': {e}")
+            except ValueError as e:  # From _resolve_path_and_ensure_within_allowed
+                self.logger.warning(
+                    f"ValueError in list_directory for path '{path}': {e}"
+                )
                 return str(e)
             except Exception as e:
-                self.logger.error(f"Error listing files at '{path}': {e}", exc_info=True)
+                self.logger.error(
+                    f"Error listing files at '{path}': {e}", exc_info=True
+                )
                 return f"{ERROR_PREFIX}Could not list directory '{path}': {e}"
 
         @mcp_server.tool()
@@ -273,16 +289,20 @@ class MCPServerFilesystem(AbstractMCPServer):
 
         @mcp_server.tool()
         def get_files_containing_text(text: str):
-            cmd = ["rg", "-il", text, str(Path(self.settings.ALLOWED_DIRECTORY).expanduser())]
+            cmd = [
+                "rg",
+                "-il",
+                text,
+                str(Path(self.settings.ALLOWED_DIRECTORY).expanduser()),
+            ]
             try:
                 completed = subprocess.run(
-                    cmd,
-                    check=True,
-                    text=True,
-                    capture_output=True
+                    cmd, check=True, text=True, capture_output=True
                 )
             except FileNotFoundError as exc:
-                raise RuntimeError("ripgrep (rg) is not installed or not in PATH") from exc
+                raise RuntimeError(
+                    "ripgrep (rg) is not installed or not in PATH"
+                ) from exc
             except subprocess.CalledProcessError as exc:
                 # ripgrep returns exit-code 1 when it finds **no** matches.
                 if exc.returncode == 1:
@@ -292,15 +312,36 @@ class MCPServerFilesystem(AbstractMCPServer):
             # stdout is one path per line.
             return [str(Path(line)) for line in completed.stdout.splitlines()]
 
-        @mcp_server.tool(description="Get directory tree")
+        @mcp_server.tool(
+            description=f"""
+                Get directory tree. To exclude directories, provide directory names as list of strings
+            """,
+        )
         def get_directory_tree_command(
-                exclude_dirs=[
-                    ".venv",
-                    "__pycache__",
-                    "node_modules",
-                ],
-                max_depth=None,
+            exclude_dirs: List[str] = [],
+            max_depth: int = 4,
         ):
+            if not exclude_dirs:
+                exclude_dirs = []
+
+            if not max_depth:
+                max_depth = 4
+
+            if isinstance(exclude_dirs, str):
+                exclude_dirs = [exclude_dirs]
+
+            default_exclude_dirs = [
+                ".venv",
+                "__pycache__",
+                "node_modules",
+            ]
+            exclude_dirs.extend(default_exclude_dirs)
+
+            if max_depth > 10:
+                raise ValueError(
+                    "max_depth > 10 is not allowed"
+                )
+
             command = ["tree"]
             if exclude_dirs:
                 # Join exclusion patterns with | for regex
@@ -313,7 +354,9 @@ class MCPServerFilesystem(AbstractMCPServer):
 
             try:
                 print(command)
-                result = subprocess.run(command, capture_output=True, text=True, check=True)
+                result = subprocess.run(
+                    command, capture_output=True, text=True, check=True
+                )
                 return result.stdout
             except subprocess.CalledProcessError as e:
                 return f"Error running tree command: {e}\n{e.stderr}"

@@ -178,7 +178,7 @@ LOGGING_CONFIG = {
             "propagate": False,
         },
         "mcp.server.lowlevel.server": {
-            "level": "INFO",
+            "level": "WARNING",
             "handlers": ["console"],
             "propagate": False,
         },
@@ -188,7 +188,7 @@ LOGGING_CONFIG = {
             "propagate": False,
         },
         "uvicorn.access": {
-            "level": "INFO",
+            "level": "WARNING",
             "handlers": ["console"],
             "propagate": False,
             "filters": ["uvicorn_access_filter"],
@@ -199,7 +199,7 @@ LOGGING_CONFIG = {
             "propagate": False,
         },
         "httpx": {
-            "level": "INFO",
+            "level": "WARNING",
             "handlers": ["console"],
             "propagate": False,
             "filters": ["httpx_messages_filter"],

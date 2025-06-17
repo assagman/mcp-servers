@@ -14,22 +14,19 @@ async def chatify(agent: Agent):
 
         user_multiline_input = None
         print("[USER]: \n")
+        lines = []
         while True:
-            line = input()
-            line = line.strip()
-            if line == "!":
+            try:
+                line = input()
+            except EOFError:
+                return "<EXIT>"
+            if line.strip() == "!":
                 break
-            if line == "q!":
-                import sys
-
-                sys.exit(0)
-            if user_multiline_input:
-                user_multiline_input = f"""
-{user_multiline_input}
-{line}
-                    """
-            else:
-                user_multiline_input = line
+            if line.strip() in ["q!", "qq", "qqq", ":q"]:
+                print("Exiting program.")
+                return "<EXIT>"
+            lines.append(line)
+        user_multiline_input = "\n".join(lines)
 
         result = await agent.run(user_multiline_input, message_history=message_history)
         print(result.output)

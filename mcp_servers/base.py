@@ -5,11 +5,12 @@ import httpx
 import uvicorn
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
+from asyncio import Task
 
+from uvicorn import Server
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from pydantic_ai.mcp import MCPServerStreamableHTTP
 from mcp.server.fastmcp import FastMCP
-from pydantic_ai.mcp import MCPServerHTTP
 
 from mcp_servers.exceptions import (
     MCPRateLimitError,
@@ -20,6 +21,27 @@ from mcp_servers.logger import MCPServersLogger
 from mcp_servers import DEFAULT_ENV_FILE
 
 
+class MCPServer(FastMCP):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.server: Optional[Server] = None
+        self.server_task: Optional[Task] = None
+
+    async def run_streamable_http_async(self) -> None:
+        """Run the server using StreamableHTTP transport."""
+
+        starlette_app = self.streamable_http_app()
+
+        config = uvicorn.Config(
+            starlette_app,
+            host=self.settings.host,
+            port=self.settings.port,
+            log_level=self.settings.log_level.lower(),
+        )
+        self.server = uvicorn.Server(config)
+        self.server_task = asyncio.create_task(self.server.serve())
+
+
 class BaseMCPServerSettings(BaseSettings):
     """Base settings for all MCP servers."""
 
@@ -28,55 +50,51 @@ class BaseMCPServerSettings(BaseSettings):
     PORT: int
     LOG_LEVEL: int = logging.INFO
     HTTP_CLIENT_TIMEOUT: float = 60.0
-    # Default rate limit: 5 requests per second. Servers can override.
     RATE_LIMIT_PER_SECOND: Optional[int] = 50
 
     model_config = SettingsConfigDict(
         env_file=DEFAULT_ENV_FILE,
-        extra="ignore",  # Ignore extra fields from .env
+        extra="ignore",
         case_sensitive=False,
     )
 
 
 class AbstractMCPServer(ABC):
     """
-    Abstract Base Class for MCP (Multi-Capability Provider) Servers.
+    Abstract Base Class for MCP Servers.
     Provides a common structure for lifecycle management, HTTP client handling,
     rate limiting, and Uvicorn server setup.
     """
 
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
+    SETTINGS_TYPE = BaseMCPServerSettings
+
+    def __init__(
+        self, host: Optional[str] = None, port: Optional[int] = None, **kwargs
+    ):
         """
         Initializes the server. Derived classes are expected to load their
         specific settings in their __init__ and pass them to super().__init__(settings=...).
         Alternatively, this __init__ can call an abstract method to load settings.
         """
-        self.host_override = host
-        self.port_override = port
-
         self.logger = MCPServersLogger.get_logger(self.__class__.__name__)
 
         self.http_client: Optional[httpx.AsyncClient] = None
-        self.mcp_server_instance: Optional[FastMCP] = None
-        self.uvicorn_server: Optional[uvicorn.Server] = None
-        self.serve_task = None  # : Optional[asyncio.Task] = None
 
         self.rate_limit_state: Dict[str, Any] = {
             "last_second_reset_ts": time.time(),
             "second_count": 0,
         }
 
-        self._settings = self._load_and_validate_settings()
-        self.override_settings()
+        self._settings = self._load_and_validate_settings(host, port, **kwargs)
+
+        self.mcp_server = MCPServer(
+            name=self.settings.SERVER_NAME,
+            port=self.settings.PORT,
+            host=self.settings.HOST,
+            log_level="WARNING",
+        )
 
         self._log_initial_config()
-
-    def override_settings(self):
-        if self.host_override:
-            self._settings.HOST = self.host_override
-
-        if self.port_override:
-            self._settings.PORT = self.port_override
 
     @property
     @abstractmethod
@@ -88,7 +106,12 @@ class AbstractMCPServer(ABC):
         pass
 
     @abstractmethod
-    def _load_and_validate_settings(self) -> BaseMCPServerSettings:
+    def _load_and_validate_settings(
+        self,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        **kwargs,
+    ) -> BaseMCPServerSettings:
         """
         Derived classes must implement this to load their specific Pydantic settings model.
         This model should inherit from BaseMCPServerSettings.
@@ -109,124 +132,47 @@ class AbstractMCPServer(ABC):
         """
         pass
 
-    async def start(self):  # -> asyncio.Task:
-        """
-        Starts the MCP server, including initializing the HTTP client (if any),
-        registering tools, and launching the Uvicorn server.
-        """
-        self.logger.info(f"Starting {self.settings.SERVER_NAME}...")
+    async def start(self):
+        await self._register_tools()
 
-        self.mcp_server_instance = FastMCP(
-            name=self.settings.SERVER_NAME,
-            port=self.settings.PORT,  # FastMCP uses this to know its port, but Uvicorn actually binds
-            host=self.settings.HOST,  # Same as above
-        )
-
-        await self._register_tools(self.mcp_server_instance)
-
-        if not self.mcp_server_instance or not self.mcp_server_instance.sse_app:
+        if not self.mcp_server or not self.mcp_server.streamable_http_app:
             self.logger.critical(
                 "FastMCP server application not initialized correctly."
             )
-            raise MCPToolConfigurationError("FastMCP sse_app not available.")
-
-        uviconfig = uvicorn.Config(
-            self.mcp_server_instance.sse_app,
-            host=self.settings.HOST,
-            port=self.settings.PORT,
-            log_level=self.settings.LOG_LEVEL,
-            factory=True,
-        )
-        self.uvicorn_server = uvicorn.Server(uviconfig)
-
-        self.serve_task = asyncio.create_task(self._run_uvicorn_server_wrapper())
-
-        # Wait for Uvicorn to actually start
-        if self.uvicorn_server:
-            while not self.uvicorn_server.started:
-                await asyncio.sleep(0.1)  # Short sleep to yield control
-            self.logger.info(
-                f"{self.settings.SERVER_NAME} (Uvicorn) started and listening on http://{self.settings.HOST}:{self.settings.PORT}"
-            )
-        else:
-            # This case should ideally not be reached if logic is correct
-            self.logger.error(
-                f"Uvicorn server for {self.settings.SERVER_NAME} not initialized after start attempt."
-            )
             raise MCPToolConfigurationError(
-                f"Uvicorn server for {self.settings.SERVER_NAME} failed to initialize."
+                "FastMCP and/or streamable_http_app not available."
             )
 
-        return self.get_mcp_server_http()
+        _ = asyncio.create_task(self.mcp_server.run_streamable_http_async())
+        while not self.mcp_server.server:
+            await asyncio.sleep(0.1)
+        while not self.mcp_server.server.started:
+            await asyncio.sleep(0.1)
 
-    async def _run_uvicorn_server_wrapper(self):
-        """Helper to run and await uvicorn server, catching potential errors during serve()."""
-        if not self.uvicorn_server:
-            self.logger.error(
-                f"Uvicorn server not initialized for {self.settings.SERVER_NAME} in _run_uvicorn_server_wrapper."
-            )
-            return
+        return self.mcp_server.server_task
+
+    async def stop(self):
         try:
-            await self.uvicorn_server.serve()
-        except Exception as e:
-            self.logger.error(
-                f"Uvicorn server for {self.settings.SERVER_NAME} encountered an error during serve: {e}"
-            )
-        finally:
-            self.logger.info(
-                f"Uvicorn server for {self.settings.SERVER_NAME} has shut down."
-            )
+            if (
+                self.mcp_server
+                and self.mcp_server.server
+                and self.mcp_server.server_task
+            ):
+                self.mcp_server.server.should_exit = True
+                await self.mcp_server.server.shutdown()
+                self.logger.info(f"Shutdown {self.settings.SERVER_NAME}")
+        except Exception as exp:
+            print("unknown exception occured while stopping Streamable HTTP server")
+            self.logger.exception(exp)
 
-    async def stop(self) -> None:
-        """Gracefully stops the MCP server and Uvicorn."""
-        self.logger.info(f"Attempting to shut down {self.settings.SERVER_NAME}...")
-
-        if self.uvicorn_server and self.uvicorn_server.started:
-            self.logger.info(
-                f"Requesting Uvicorn server ({self.settings.SERVER_NAME}) to exit."
-            )
-            self.uvicorn_server.should_exit = True
-
-        if self.serve_task and not self.serve_task.done():
-            self.logger.info(
-                f"Waiting for {self.settings.SERVER_NAME} Uvicorn task to complete..."
-            )
-            try:
-                await asyncio.wait_for(self.serve_task, timeout=10.0)
-            except asyncio.TimeoutError:
-                self.logger.warning(
-                    f"{self.settings.SERVER_NAME} Uvicorn task timed out during shutdown, cancelling."
-                )
-                self.serve_task.cancel()
-                try:
-                    await self.serve_task  # Await cancellation
-                except asyncio.CancelledError:
-                    self.logger.info(
-                        f"{self.settings.SERVER_NAME} Uvicorn task successfully cancelled."
-                    )
-                except Exception as e:
-                    self.logger.error(
-                        f"Error during {self.settings.SERVER_NAME} Uvicorn task cancellation: {e}"
-                    )
-            except Exception as e:
-                self.logger.error(
-                    f"Exception during {self.settings.SERVER_NAME} serve_task await on stop: {e}"
-                )
-        else:
-            self.logger.info(
-                f"{self.settings.SERVER_NAME} Uvicorn task already completed or not started."
-            )
-
-        self.logger.info(f"{self.settings.SERVER_NAME} stop sequence completed.")
-
-    def get_mcp_server_http(self) -> MCPServerHTTP:
+    def get_mcp_server_streamable_http(self) -> MCPServerStreamableHTTP:
         """Returns an MCPServerHTTP client configuration for this server."""
         if not self.settings:
             raise MCPToolConfigurationError(
                 "Settings not loaded, cannot generate MCPServerHTTP URL."
             )
-        return MCPServerHTTP(
-            url=f"http://{self.settings.HOST}:{self.settings.PORT}/sse"
+        return MCPServerStreamableHTTP(
+            url=f"http://{self.settings.HOST}:{self.settings.PORT}/mcp"
         )
 
 

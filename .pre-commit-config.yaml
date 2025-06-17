@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff Check
+        entry: uv run ruff check .
+        language: system
+        pass_filenames: false # Ruff checks the whole project, not just staged files
+
+      - id: black-check
+        name: Black Check
+        entry: uv run black --check .
+        language: system
+        pass_filenames: false # Black checks the whole project, not just staged files

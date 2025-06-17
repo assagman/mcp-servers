@@ -200,7 +200,6 @@ class MCPServerFilesystem(AbstractMCPServer):
 
     async def _register_tools(self) -> None:
         """Registers filesystem tools with the FastMCP server instance."""
-        self.logger.info(f"Registering tools for {self.settings.SERVER_NAME}...")
 
         @self.mcp_server.tool(description="Get current working directory, CWD")
         async def get_working_directory() -> str:
@@ -226,13 +225,19 @@ class MCPServerFilesystem(AbstractMCPServer):
                 A list of dictionaries, each with 'name' and 'type' ('file' or 'directory'),
                 or an error string if the operation fails.
             """
-            self.logger.info(f"Listing contents of directory: {path}")
+            self.logger.debug(f"Listing contents of directory: {path}")
 
             try:
                 target_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not target_path.exists():
+                    self.logger.warning(
+                        f"List directory: Path '{path}' does not exist."
+                    )
                     return f"{ERROR_PREFIX}Path '{path}' does not exist."
                 if not target_path.is_dir():
+                    self.logger.warning(
+                        f"List directory: Path '{path}' is not a directory."
+                    )
                     return f"{ERROR_PREFIX}Path '{path}' is not a directory."
 
                 entries = []
@@ -260,7 +265,7 @@ class MCPServerFilesystem(AbstractMCPServer):
 
         @self.mcp_server.tool()
         def find_file_in_project(filename: str):
-            self.logger.info(f"Finding file: {filename}")
+            self.logger.debug(f"Finding file: {filename}")
             exclude_directories = [
                 ".venv",
                 "__pycache__",
@@ -276,11 +281,16 @@ class MCPServerFilesystem(AbstractMCPServer):
                     continue
 
                 if filename in files:
+                    self.logger.info(
+                        f"Found file '{filename}' at '{os.path.join(root, filename)}'."
+                    )
                     return os.path.join(root, filename)
+            self.logger.info(f"File '{filename}' not found.")
             return None
 
         @self.mcp_server.tool()
         def get_files_containing_text(text: str):
+            self.logger.debug(f"Searching for text '{text}' in project files.")
             cmd = [
                 "rg",
                 "-il",
@@ -291,18 +301,31 @@ class MCPServerFilesystem(AbstractMCPServer):
                 completed = subprocess.run(
                     cmd, check=True, text=True, capture_output=True
                 )
+                found_files = [
+                    str(Path(line)) for line in completed.stdout.splitlines()
+                ]
+                self.logger.info(
+                    f"Found {len(found_files)} files containing text '{text}'."
+                )
+                return found_files
             except FileNotFoundError as exc:
+                self.logger.error("ripgrep (rg) is not installed or not in PATH.")
                 raise RuntimeError(
                     "ripgrep (rg) is not installed or not in PATH"
                 ) from exc
             except subprocess.CalledProcessError as exc:
-                # ripgrep returns exit-code 1 when it finds **no** matches.
                 if exc.returncode == 1:
+                    self.logger.info(f"No files found containing text '{text}'.")
                     return []
+                self.logger.error(
+                    f"Error running ripgrep: {exc}\n{exc.stderr}", exc_info=True
+                )
                 raise
-
-            # stdout is one path per line.
-            return [str(Path(line)) for line in completed.stdout.splitlines()]
+            except Exception as e:
+                self.logger.error(
+                    f"Unexpected error searching for text '{text}': {e}", exc_info=True
+                )
+                raise
 
         @self.mcp_server.tool(
             description="""
@@ -313,6 +336,9 @@ class MCPServerFilesystem(AbstractMCPServer):
             exclude_dirs: List[str] = [],
             max_depth: int = 4,
         ):
+            self.logger.debug(
+                f"Getting directory tree with exclude_dirs: {exclude_dirs}, max_depth: {max_depth}"
+            )
             if not exclude_dirs:
                 exclude_dirs = []
 
@@ -330,6 +356,9 @@ class MCPServerFilesystem(AbstractMCPServer):
             exclude_dirs.extend(default_exclude_dirs)
 
             if max_depth > 10:
+                self.logger.warning(
+                    "get_directory_tree_command: max_depth > 10 is not allowed."
+                )
                 raise ValueError("max_depth > 10 is not allowed")
 
             command = ["tree"]
@@ -343,15 +372,25 @@ class MCPServerFilesystem(AbstractMCPServer):
             command.extend([str(self.settings.ALLOWED_DIRECTORY)])
 
             try:
-                self.logger.info(command)
+                self.logger.info(f"Executing: {' '.join(command)}")
                 result = subprocess.run(
                     command, capture_output=True, text=True, check=True
                 )
+                self.logger.debug("Directory tree command executed successfully.")
                 return result.stdout
             except subprocess.CalledProcessError as e:
+                self.logger.error(
+                    f"Error running tree command: {e}\n{e.stderr}", exc_info=True
+                )
                 return f"Error running tree command: {e}\n{e.stderr}"
             except FileNotFoundError:
+                self.logger.error("'tree' command not found.")
                 return "Error: 'tree' command not found. Please install it."
+            except Exception as e:
+                self.logger.error(
+                    f"Unexpected error getting directory tree: {e}", exc_info=True
+                )
+                raise
 
         @self.mcp_server.tool()
         async def read_file(path: str) -> str:
@@ -364,16 +403,18 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 The content of the file as a string, or an error string if the operation fails.
             """
-            self.logger.info(f"Reading file: {path}")
+            self.logger.debug(f"Reading file: {path}")
             try:
                 file_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not file_path.exists():
+                    self.logger.warning(f"Read file: File '{path}' not found.")
                     return f"{ERROR_PREFIX}File '{path}' not found."
                 if not file_path.is_file():
+                    self.logger.warning(f"Read file: Path '{path}' is not a file.")
                     return f"{ERROR_PREFIX}Path '{path}' is not a file."
 
                 content = file_path.read_text(encoding=STR_ENCODING)
-                self.logger.debug(f"Read file '{file_path}' ({len(content)} bytes).")
+                self.logger.info(f"Read file '{file_path}' ({len(content)} bytes).")
                 # Consider adding a max file size limit here if desired.
                 return content
             except ValueError as e:
@@ -400,12 +441,16 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
+            self.logger.debug(
+                f"Writing to file: {path}, create_parents: {create_parents}"
+            )
             try:
                 file_path = self._resolve_path_and_ensure_within_allowed(path)
 
                 if (
                     file_path.is_dir()
                 ):  # Explicit check, though write_text would also fail
+                    self.logger.warning(f"Write file: Path '{path}' is a directory.")
                     return f"{ERROR_PREFIX}Path '{path}' is a directory. Cannot write file content to a directory."
 
                 parent_dir = file_path.parent
@@ -417,10 +462,16 @@ class MCPServerFilesystem(AbstractMCPServer):
                         )
                         parent_dir.mkdir(parents=True, exist_ok=True)
                     else:
+                        self.logger.warning(
+                            f"Write file: Parent directory for '{path}' does not exist and create_parents is False."
+                        )
                         return f"{ERROR_PREFIX}Parent directory for '{path}' does not exist. Use create_parents=True to create it."
                 elif (
                     not parent_dir.is_dir()
                 ):  # Parent path exists but is not a directory
+                    self.logger.warning(
+                        f"Write file: Parent path '{parent_dir.relative_to(self.settings.ALLOWED_DIRECTORY)}' for '{path}' is not a directory."
+                    )
                     return f"{ERROR_PREFIX}Parent path '{parent_dir.relative_to(self.settings.ALLOWED_DIRECTORY)}' for '{path}' is not a directory."
 
                 file_path.write_text(content, encoding=STR_ENCODING)
@@ -448,6 +499,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
+            self.logger.debug(f"Moving item from {source_path} to {destination_path}")
             try:
                 source_abs = self._resolve_path_and_ensure_within_allowed(source_path)
                 dest_abs = self._resolve_path_and_ensure_within_allowed(
@@ -455,10 +507,16 @@ class MCPServerFilesystem(AbstractMCPServer):
                 )
 
                 if not source_abs.exists():
+                    self.logger.warning(
+                        f"Move item: Source path '{source_path}' does not exist."
+                    )
                     return f"{ERROR_PREFIX}Source path '{source_path}' does not exist."
 
                 # Prevent moving allowed_directory itself
                 if source_abs == self.settings.ALLOWED_DIRECTORY:
+                    self.logger.warning(
+                        f"Move item: Cannot move the root allowed directory '{source_path}'."
+                    )
                     return f"{ERROR_PREFIX}Cannot move the root allowed directory."
 
                 # Handle case: moving a file into an existing directory
@@ -478,17 +536,29 @@ class MCPServerFilesystem(AbstractMCPServer):
                     if (
                         final_dest_abs_validated.is_dir()
                     ):  # Cannot overwrite a directory with a file implicitly
-                        return f"{ERROR_PREFIX}Cannot overwrite directory '{final_dest_abs_validated.relative_to(self.settings.ALLOWED_DIRECTORY)}' with file '{source_path}'."
+                        self.logger.warning(
+                            f"Move item: Cannot overwrite directory '{final_dest_abs_validated.relative_to(self.settings.ALLOWED_DIRECTORY)}' with file '{source_path}'."
+                        )
+                        return f"{ERROR_PREFIX}Cannot overwrite directory '{final_dest_abs_validated.relative_to(self.settings.ALLOWED_DIRECTORY)}' with file '{source_path}'. Perform delete first."
                     dest_abs = final_dest_abs_validated
 
                 if dest_abs.exists() and source_abs.is_dir() and dest_abs.is_file():
-                    return f"{ERROR_PREFIX}Cannot overwrite file '{destination_path}' with directory '{source_path}'."
+                    self.logger.warning(
+                        f"Move item: Cannot overwrite file '{destination_path}' with directory '{source_path}'."
+                    )
+                    return f"{ERROR_PREFIX}Cannot overwrite file '{destination_path}' with directory '{source_path}'. Perform delete first."
 
                 # Prevent moving a directory into itself or a subdirectory of itself.
                 if source_abs.is_dir() and dest_abs.is_relative_to(source_abs):
+                    self.logger.warning(
+                        f"Move item: Cannot move directory '{source_path}' into itself or one of its subdirectories ('{destination_path}')."
+                    )
                     return f"{ERROR_PREFIX}Cannot move directory '{source_path}' into itself or one of its subdirectories ('{destination_path}')."
 
                 if source_abs == dest_abs:
+                    self.logger.info(
+                        f"Move item: Source and destination '{source_path}' are the same."
+                    )
                     return f"Source and destination '{source_path}' are the same. No action taken."
 
                 shutil.move(str(source_abs), str(dest_abs))
@@ -523,11 +593,14 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
+            self.logger.debug(f"Deleting file: {path}")
             try:
                 file_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not file_path.exists():
+                    self.logger.warning(f"Delete file: File '{path}' not found.")
                     return f"{ERROR_PREFIX}File '{path}' not found."
                 if file_path.is_dir():
+                    self.logger.warning(f"Delete file: Path '{path}' is a directory.")
                     return f"{ERROR_PREFIX}Path '{path}' is a directory. Use 'delete_directory' to delete directories."
 
                 file_path.unlink()
@@ -552,9 +625,11 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
+            self.logger.debug(f"Creating directory: {path}")
             try:
                 dir_path = self._resolve_path_and_ensure_within_allowed(path)
                 if dir_path.exists() and not dir_path.is_dir():
+                    self.logger.warning(f"Path '{path}' exists and is not a directory.")
                     return f"{ERROR_PREFIX}Path '{path}' exists and is not a directory. Cannot create directory."
 
                 dir_path.mkdir(parents=True, exist_ok=True)
@@ -588,15 +663,25 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
+            self.logger.debug(f"Deleting directory: {path}, recursive: {recursive}")
             try:
                 dir_path = self._resolve_path_and_ensure_within_allowed(path)
 
                 if not dir_path.exists():
+                    self.logger.warning(
+                        f"Delete directory: Directory '{path}' not found."
+                    )
                     return f"{ERROR_PREFIX}Directory '{path}' not found."
                 if not dir_path.is_dir():
+                    self.logger.warning(
+                        f"Delete directory: Path '{path}' is not a directory."
+                    )
                     return f"{ERROR_PREFIX}Path '{path}' is not a directory."
                 if dir_path == self.settings.ALLOWED_DIRECTORY:
-                    return f"{ERROR_PREFIX}Cannot delete the root allowed directory '{path}'."
+                    self.logger.warning(
+                        f"Delete directory: Cannot delete the root allowed directory '{path}'."
+                    )
+                    return f"{ERROR_PREFIX}Cannot delete the root allowed directory '{path}'. Perform clean up inside of it, or restart server."
 
                 if recursive:
                     shutil.rmtree(dir_path)
@@ -606,6 +691,9 @@ class MCPServerFilesystem(AbstractMCPServer):
                     return f"Successfully deleted directory '{path}' and its contents."
                 else:
                     if any(dir_path.iterdir()):  # Check if directory is empty
+                        self.logger.warning(
+                            f"Delete directory: Directory '{path}' not empty and recursive is False."
+                        )
                         return f"{ERROR_PREFIX}Directory '{path}' is not empty. Use recursive=True to delete non-empty directories."
                     dir_path.rmdir()
                     self.logger.info(
@@ -635,9 +723,11 @@ class MCPServerFilesystem(AbstractMCPServer):
                 A dictionary containing metadata (name, path, type, size, modified_time, created_time, absolute_path)
                 or an error string if the operation fails. Times are in ISO 8601 format.
             """
+            self.logger.debug(f"Getting metadata for: {path}")
             try:
                 target_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not target_path.exists():
+                    self.logger.warning(f"Get metadata: Path '{path}' does not exist.")
                     return f"{ERROR_PREFIX}Path '{path}' does not exist."
 
                 stat_info = target_path.stat()

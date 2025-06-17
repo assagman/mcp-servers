@@ -1,5 +1,4 @@
 import os
-import sys
 from typing import List, Optional, Dict, Any, cast
 
 from pydantic import BaseModel, HttpUrl, Field, AliasChoices
@@ -165,19 +164,31 @@ class MCPServerBrave(MCPServerHttpBase):
             Returns:
                 str: A string containing the formatted search results, or an error message.
             """
+            self.logger.debug(f"Brave web search tool called with query: {query}")
             if not isinstance(query, str) or not query.strip():
+                self.logger.warning("Brave search: Query must be a non-empty string.")
                 raise ValueError("Query must be a non-empty string.")
             if not isinstance(count, int) or not (1 <= count <= 20):
-                # FastMCP might do this validation based on type hints/Pydantic, but explicit check is safer.
-                # The schema description says 1-20, default 10. min(count,20) is applied later.
-                # Let's ensure count is reasonable before API call.
+                self.logger.warning(
+                    "Brave search: Count must be an integer between 1 and 20."
+                )
                 raise ValueError("Count must be an integer between 1 and 20.")
             if not isinstance(offset, int) or offset < 0:
+                self.logger.warning(
+                    "Brave search: Offset must be a non-negative integer."
+                )
                 raise ValueError("Offset must be a non-negative integer.")
 
             try:
-                return await self._perform_web_search(query, count, offset)
+                result = await self._perform_web_search(
+                    query, count, offset, search_lang, freshness
+                )
+                self.logger.debug(
+                    f"Brave web search tool returned result for query: {query}"
+                )
+                return result
             except Exception as e:
-                self.logger.error(f"ERROR in brave_web_search: {e}", file=sys.stderr)
-                # Re-raise to let FastMCP handle it and format the error response
+                self.logger.error(
+                    f"ERROR in brave_web_search for query '{query}': {e}", exc_info=True
+                )
                 raise

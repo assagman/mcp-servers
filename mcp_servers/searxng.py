@@ -201,23 +201,29 @@ class MCPServerSearxng(MCPServerHttpBase):
             Returns:
                 str: Formatted search results or an error message.
             """
+            self.logger.debug(f"SearXNG tool called with query: {query}")
             # Basic input validation
             if not isinstance(query, str) or not query.strip():
+                self.logger.warning("SearXNG: Query must be a non-empty string.")
                 raise ValueError("Query must be a non-empty string.")
             if not isinstance(pageno, int) or pageno < 1:
+                self.logger.warning("SearXNG: Page number must be a positive integer.")
                 raise ValueError("Page number (pageno) must be a positive integer.")
             if categories is not None and not isinstance(categories, str):
+                self.logger.warning(
+                    "SearXNG: Categories must be a comma-separated string if provided."
+                )
                 raise ValueError(
                     "Categories must be a comma-separated string if provided."
                 )
             if not isinstance(language, str) or not language:  # Basic check
+                self.logger.warning("SearXNG: Language must be a non-empty string.")
                 raise ValueError("Language must be a non-empty string.")
 
             try:
-                # The `builtins.str` issue was very specific to a debug print where `str` was shadowed.
-                # For general code, `str()` is fine. If `str` is a parameter name (bad practice), then use `builtins.str()`.
-                # Here, `str` is not shadowed.
-                return await self._perform_search(query, pageno, categories, language)
+                result = await self._perform_search(query, pageno, categories, language)
+                self.logger.debug(f"SearXNG tool returned result for query: {query}")
+                return result
             except MCPUpstreamServiceError as e:
                 self.logger.error(
                     f"Upstream service error in searxng for query '{query}': {e}"

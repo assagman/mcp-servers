@@ -282,18 +282,31 @@ class MCPServerTavily(MCPServerHttpBase):
             Returns:
                 str: Formatted search results or an error message.
             """
+            self.logger.debug(
+                f"Tavily search tool called with query: {query}, depth: {search_depth}"
+            )
             if not isinstance(query, str) or not query.strip():
+                self.logger.warning("Tavily search: Query must be a non-empty string.")
                 return "Error: Query must be a non-empty string."
             if search_depth not in [
                 self.SEARCH_DEPTH_BASIC,
                 self.SEARCH_DEPTH_ADVANCED,
             ]:
+                self.logger.warning(
+                    f"Tavily search: Invalid search_depth '{search_depth}'."
+                )
                 return f"Error: search_depth must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
             if not (1 <= max_results <= 20):
+                self.logger.warning(
+                    f"Tavily search: max_results '{max_results}' must be between 1 and 20."
+                )
                 return "Error: max_results must be between 1 and 20."
             if days_published_ago is not None and not (
                 isinstance(days_published_ago, int) and days_published_ago > 0
             ):
+                self.logger.warning(
+                    f"Tavily search: days_published_ago '{days_published_ago}' must be a positive integer."
+                )
                 return "Error: days_published_ago must be a positive integer."
 
             payload: Dict[str, Any] = {
@@ -309,11 +322,20 @@ class MCPServerTavily(MCPServerHttpBase):
             if days_published_ago is not None:
                 payload["days_published_ago"] = days_published_ago
 
-            response_dict = await self._make_post_request_with_retry(
-                self.TAVILY_ENDPOINT, payload
-            )
-            validated_response = TavilyApiResponse.model_validate(response_dict)
-            return self._format_search_results(validated_response)
+            try:
+                response_dict = await self._make_post_request_with_retry(
+                    self.TAVILY_ENDPOINT, payload
+                )
+                validated_response = TavilyApiResponse.model_validate(response_dict)
+                self.logger.debug(
+                    f"Tavily search tool returned result for query: {query}"
+                )
+                return self._format_search_results(validated_response)
+            except Exception as e:
+                self.logger.error(
+                    f"Error in tavily search for query '{query}': {e}", exc_info=True
+                )
+                return f"Error occurred during Tavily search: {e}"
 
         @self.mcp_server.tool()
         async def tavily_extract_content(
@@ -332,14 +354,14 @@ class MCPServerTavily(MCPServerHttpBase):
             Returns:
                 str: The extracted textual content of the webpage, or an error message.
             """
+            self.logger.debug(
+                f"Tavily extract content tool called for URL: {url_to_extract}"
+            )
             try:
                 validated_url = HttpUrl(url_to_extract)
                 self.logger.info(f"Extracting URL: {validated_url}")
             except ValueError:
-                err_msg = (
-                    f"Error: Invalid URL format provided: {url_to_extract}"
-                    f"Error: Invalid URL format provided: {url_to_extract}"
-                )
+                err_msg = f"Error: Invalid URL format provided: {url_to_extract}"
                 self.logger.warning(err_msg)
                 return err_msg
 
@@ -356,21 +378,24 @@ class MCPServerTavily(MCPServerHttpBase):
                 "extract_depth": extract_depth,
                 "include_images": include_images_in_extract,
             }
-            response_dict = await self._make_post_request_with_retry(
-                self.TAVILY_EXTRACT_ENDPOINT, payload
-            )
-
             try:
+                response_dict = await self._make_post_request_with_retry(
+                    self.TAVILY_EXTRACT_ENDPOINT, payload
+                )
+
                 validated_response = TavilyExtractApiResponse.model_validate(
                     response_dict
                 )
-            except Exception as exp:
-                self.logger.warning(
-                    f"TavilyExtractApiResponse.model_validate failed: {exp}"
+                self.logger.debug(
+                    f"Tavily extract content tool returned result for URL: {url_to_extract}"
                 )
-                return str(exp)
-
-            return self._format_extract_results(validated_response)
+                return self._format_extract_results(validated_response)
+            except Exception as exp:
+                self.logger.error(
+                    f"Error in tavily_extract_content for URL '{url_to_extract}': {exp}",
+                    exc_info=True,
+                )
+                return f"Error occurred during Tavily content extraction: {exp}"
 
         @self.mcp_server.tool()
         async def tavily_crawl_url(
@@ -409,24 +434,37 @@ class MCPServerTavily(MCPServerHttpBase):
             Returns:
                 str: Formatted crawled content or an error message.
             """
-            try:
-                if not isinstance(url_to_crawl, str) or not url_to_crawl.strip():
-                    return "Error: url_to_crawl must be a non-empty string."
-            except ValueError:
-                return (
-                    f"Error: Invalid URL format provided for crawling: {url_to_crawl}"
+            self.logger.debug(
+                f"Tavily crawl URL tool called for URL: {url_to_crawl}, max_depth: {max_depth}"
+            )
+            if not isinstance(url_to_crawl, str) or not url_to_crawl.strip():
+                self.logger.warning(
+                    "Tavily crawl: url_to_crawl must be a non-empty string."
                 )
+                return "Error: url_to_crawl must be a non-empty string."
 
             if not (isinstance(max_depth, int) and max_depth >= 0):
+                self.logger.warning(
+                    f"Tavily crawl: max_depth '{max_depth}' must be a non-negative integer."
+                )
                 return "Error: max_depth must be a non-negative integer."
             if not (isinstance(max_breadth, int) and max_breadth > 0):
+                self.logger.warning(
+                    f"Tavily crawl: max_breadth '{max_breadth}' must be a positive integer."
+                )
                 return "Error: max_breadth must be a positive integer."
             if not (isinstance(limit, int) and limit > 0):
+                self.logger.warning(
+                    f"Tavily crawl: limit '{limit}' must be a positive integer."
+                )
                 return "Error: limit must be a positive integer."
             if extract_depth_for_crawl not in [
                 self.SEARCH_DEPTH_BASIC,
                 self.SEARCH_DEPTH_ADVANCED,
             ]:
+                self.logger.warning(
+                    f"Tavily crawl: extract_depth_for_crawl '{extract_depth_for_crawl}' must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
+                )
                 return f"Error: extract_depth_for_crawl must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
 
             payload: Dict[str, Any] = {
@@ -452,8 +490,20 @@ class MCPServerTavily(MCPServerHttpBase):
             if categories:
                 payload["categories"] = categories
 
-            response_dict = await self._make_post_request_with_retry(
-                self.TAVILY_CRAWL_ENDPOINT, payload
-            )
-            validated_response = TavilyCrawlApiResponse.model_validate(response_dict)
-            return self._format_crawl_results(validated_response)
+            try:
+                response_dict = await self._make_post_request_with_retry(
+                    self.TAVILY_CRAWL_ENDPOINT, payload
+                )
+                validated_response = TavilyCrawlApiResponse.model_validate(
+                    response_dict
+                )
+                self.logger.debug(
+                    f"Tavily crawl URL tool returned result for URL: {url_to_crawl}"
+                )
+                return self._format_crawl_results(validated_response)
+            except Exception as e:
+                self.logger.error(
+                    f"Error in tavily_crawl_url for URL '{url_to_crawl}': {e}",
+                    exc_info=True,
+                )
+                return f"Error occurred during Tavily URL crawling: {e}"

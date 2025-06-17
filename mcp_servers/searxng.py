@@ -69,19 +69,16 @@ class MCPServerSearxng(MCPServerHttpBase):
     def settings(self):
         return cast(SearXNGServerSettings, self._settings)
 
-    def _load_and_validate_settings(self) -> SearXNGServerSettings:
+    def _load_and_validate_settings(
+        self, host: Optional[str] = None, port: Optional[int] = None, **_
+    ) -> SearXNGServerSettings:
         """Load Searxng Search specific MCP server settings"""
-        return SearXNGServerSettings()
-
-    def _log_initial_config(self):
-        super()._log_initial_config()
-
-        self.logger.info("--- MCPServerSearxng Configuration ---")
-        self.logger.info(f"  SERVER_NAME:       {self.settings.SERVER_NAME}")
-        self.logger.info(f"  HOST:              {self.settings.HOST}")
-        self.logger.info(f"  PORT:              {self.settings.PORT}")
-        self.logger.info(f"  BASE_URL:          {self.settings.BASE_URL}")
-        self.logger.info("--- End MCPServerSearxng Configuration ---")
+        settings = SearXNGServerSettings()
+        if host:
+            settings.HOST = host
+        if port:
+            settings.PORT = port
+        return settings
 
     def _get_http_client_config(self) -> Dict[str, Any]:
         """Configures the HTTP client for SearXNG."""

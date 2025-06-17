@@ -101,9 +101,27 @@ class AbstractMCPServer(ABC):
     def settings(self) -> BaseMCPServerSettings:
         return self._settings
 
-    @abstractmethod
     def _log_initial_config(self):
-        pass
+        settings_dict = self.settings.model_dump()
+        max_field_length = max([len(f) for f in settings_dict.keys()])
+        max_field_val_length = max([len(str(f)) for f in settings_dict.values()])
+        title = f"{self.settings.SERVER_NAME} Configuration"
+        table_width = (
+            max(max_field_length + max_field_val_length, len(title)) + 2
+        )  # buffer
+        if table_width % 2 != 0:
+            table_width -= 1
+        decorated_title = f"{'=' * ((table_width - len(title)) // 2)} {title} {'=' * ((table_width - len(title)) // 2)}"
+        self.logger.info(decorated_title)
+        for field in sorted(settings_dict.keys()):
+            if "API_KEY" in field:
+                continue
+            field_val = settings_dict.get(field)
+            table_record = f"|  {field}: {field_val}"
+            self.logger.info(
+                f"{table_record} {' ' * (len(decorated_title) - len(table_record) - 1)}|"
+            )
+        self.logger.info("=" * len(decorated_title))
 
     @abstractmethod
     def _load_and_validate_settings(

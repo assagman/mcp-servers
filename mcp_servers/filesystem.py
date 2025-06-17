@@ -113,33 +113,25 @@ class MCPServerFilesystem(AbstractMCPServer):
         port: Optional[int] = None,
         allowed_dir: Optional[Path] = None,
     ):
-        self.allowed_dir_override = allowed_dir
-        super().__init__(host=host, port=port)
-
-    def override_settings(self):
-        super().override_settings()
-        self._settings = cast(MCPServerFilesystemSettings, self._settings)
-
-        if self.allowed_dir_override:
-            self._settings.ALLOWED_DIRECTORY = self.allowed_dir_override
+        super().__init__(host=host, port=port, allowed_dir=allowed_dir)
 
     @property
     def settings(self):
         return cast(MCPServerFilesystemSettings, self._settings)
 
-    def _load_and_validate_settings(self) -> MCPServerFilesystemSettings:
+    def _load_and_validate_settings(
+        self, host: Optional[str] = None, port: Optional[int] = None, **kwargs
+    ) -> MCPServerFilesystemSettings:
         """Loads and validates the filesystem server settings."""
-        return MCPServerFilesystemSettings()
-
-    def _log_initial_config(self) -> None:
-        """Logs the initial configuration of the server."""
-        settings: MCPServerFilesystemSettings = self.settings
-        self.logger.info("--- MCPServerFilesystem Configuration ---")
-        self.logger.info(f"  SERVER_NAME:       {settings.SERVER_NAME}")
-        self.logger.info(f"  HOST:              {settings.HOST}")
-        self.logger.info(f"  PORT:              {settings.PORT}")
-        self.logger.info(f"  ALLOWED_DIRECTORY: {settings.ALLOWED_DIRECTORY}")
-        self.logger.info("--- End MCPServerFilesystem Configuration ---")
+        settings = MCPServerFilesystemSettings()
+        allowed_dir: Optional[str] = kwargs.pop("allowed_dir")
+        if host:
+            settings.HOST = host
+        if port:
+            settings.PORT = port
+        if allowed_dir:
+            settings.ALLOWED_DIRECTORY = Path(allowed_dir).expanduser().resolve()
+        return settings
 
     def _resolve_path_and_ensure_within_allowed(self, relative_path_str: str) -> Path:
         """

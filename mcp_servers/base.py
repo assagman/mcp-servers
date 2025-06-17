@@ -138,7 +138,7 @@ class AbstractMCPServer(ABC):
         pass
 
     @abstractmethod
-    async def _register_tools(self, mcp_server: FastMCP) -> None:
+    async def _register_tools(self) -> None:
         """
         Derived classes must implement this to register their specific tools
         with the FastMCP instance.

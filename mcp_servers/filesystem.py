@@ -7,7 +7,6 @@ import shutil
 import subprocess
 
 from pydantic import Field, AliasChoices, field_validator, model_validator
-from mcp.server.fastmcp import FastMCP
 
 from mcp_servers.base import AbstractMCPServer, BaseMCPServerSettings
 from mcp_servers.logger import MCPServersLogger
@@ -199,11 +198,11 @@ class MCPServerFilesystem(AbstractMCPServer):
             )
         return prospective_path
 
-    async def _register_tools(self, mcp_server: FastMCP) -> None:
+    async def _register_tools(self) -> None:
         """Registers filesystem tools with the FastMCP server instance."""
         self.logger.info(f"Registering tools for {self.settings.SERVER_NAME}...")
 
-        @mcp_server.tool(description="Get current working directory, CWD")
+        @self.mcp_server.tool(description="Get current working directory, CWD")
         async def get_working_directory() -> str:
             """
             Returns the absolute path to the current working directory for file operations.
@@ -212,7 +211,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             self.logger.info("Getting current working directory")
             return str(self.settings.ALLOWED_DIRECTORY)
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def list_directory(
             path: str = str(self.settings.ALLOWED_DIRECTORY),
         ) -> Union[List[Dict[str, str]], str]:
@@ -259,7 +258,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 )
                 return f"{ERROR_PREFIX}Could not list directory '{path}': {e}"
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         def find_file_in_project(filename: str):
             self.logger.info(f"Finding file: {filename}")
             exclude_directories = [
@@ -280,7 +279,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                     return os.path.join(root, filename)
             return None
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         def get_files_containing_text(text: str):
             cmd = [
                 "rg",
@@ -305,7 +304,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             # stdout is one path per line.
             return [str(Path(line)) for line in completed.stdout.splitlines()]
 
-        @mcp_server.tool(
+        @self.mcp_server.tool(
             description="""
                 Get directory tree. To exclude directories, provide directory names as list of strings
             """,
@@ -354,7 +353,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             except FileNotFoundError:
                 return "Error: 'tree' command not found. Please install it."
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def read_file(path: str) -> str:
             """
             Reads the content of a file at the given path, relative to the allowed working directory.
@@ -384,7 +383,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 self.logger.error(f"Error reading file '{path}': {e}", exc_info=True)
                 return f"{ERROR_PREFIX}Could not read file '{path}': {e}"
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def write_file(
             path: str, content: str, create_parents: bool = False
         ) -> str:
@@ -436,7 +435,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 self.logger.error(f"Error writing to file '{path}': {e}", exc_info=True)
                 return f"{ERROR_PREFIX}Could not write to file '{path}': {e}"
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def move_item(source_path: str, destination_path: str) -> str:
             """
             Moves or renames a file or directory from source_path to destination_path.
@@ -513,7 +512,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 )
                 return f"{ERROR_PREFIX}Could not move '{source_path}' to '{destination_path}': {e}"
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def delete_file(path: str) -> str:
             """
             Deletes a file at the given path, relative to the allowed working directory.
@@ -541,7 +540,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 self.logger.error(f"Error deleting file '{path}': {e}", exc_info=True)
                 return f"{ERROR_PREFIX}Could not delete file '{path}': {e}"
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def create_directory(path: str) -> str:
             """
             Creates a directory at the given path, relative to the allowed working directory.
@@ -576,7 +575,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 )
                 return f"{ERROR_PREFIX}Could not create directory '{path}': {e}"
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def delete_directory(path: str, recursive: bool = False) -> str:
             """
             Deletes a directory at the given path, relative to the allowed working directory.
@@ -624,7 +623,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 )
                 return f"{ERROR_PREFIX}Could not delete directory '{path}': {e}"
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def get_item_metadata(path: str) -> Union[Dict[str, Any], str]:
             """
             Retrieves metadata for a file or directory at the given path.

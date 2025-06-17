@@ -3,7 +3,6 @@ from typing import List, Optional, Dict, Any, Union, cast
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, AliasChoices
 
-from mcp.server.fastmcp import FastMCP
 
 from mcp_servers.base import MCPServerHttpBase, MCPServerHttpBaseSettings
 from mcp_servers.logger import MCPServersLogger
@@ -252,8 +251,8 @@ class MCPServerTavily(MCPServerHttpBase):
             output_parts.append(f"\nResponse Time: {response.response_time:.2f}s")
         return "\n".join(output_parts)
 
-    async def _register_tools(self, mcp_server: FastMCP):
-        @mcp_server.tool()
+    async def _register_tools(self):
+        @self.mcp_server.tool()
         async def tavily(
             query: str,
             search_depth: str = self.SEARCH_DEPTH_BASIC,
@@ -316,7 +315,7 @@ class MCPServerTavily(MCPServerHttpBase):
             validated_response = TavilyApiResponse.model_validate(response_dict)
             return self._format_search_results(validated_response)
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def tavily_extract_content(
             url_to_extract: str,
             extract_depth: str = self.SEARCH_DEPTH_BASIC,
@@ -373,7 +372,7 @@ class MCPServerTavily(MCPServerHttpBase):
 
             return self._format_extract_results(validated_response)
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def tavily_crawl_url(
             url_to_crawl: str,
             max_depth: int = 1,

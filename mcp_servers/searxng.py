@@ -2,7 +2,6 @@ from typing import List, Optional, Dict, Union, Any, cast
 
 from pydantic import HttpUrl, Field, AliasChoices
 from pydantic import BaseModel
-from mcp.server.fastmcp import FastMCP
 
 from mcp_servers.base import MCPServerHttpBase, MCPServerHttpBaseSettings
 from mcp_servers.exceptions import MCPUpstreamServiceError, MCPRateLimitError
@@ -182,10 +181,10 @@ class MCPServerSearxng(MCPServerHttpBase):
         data = SearXNGResponse.model_validate(json_data)
         return self._format_searxng_results(data)
 
-    async def _register_tools(self, mcp_server: FastMCP) -> None:
+    async def _register_tools(self) -> None:
         """Registers the searxng tool."""
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def searxng(
             query: str,
             pageno: int = 1,

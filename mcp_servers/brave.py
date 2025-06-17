@@ -3,7 +3,6 @@ import sys
 from typing import List, Optional, Dict, Any, cast
 
 from pydantic import BaseModel, HttpUrl, Field, AliasChoices
-from mcp.server.fastmcp import FastMCP
 
 from mcp_servers.base import MCPServerHttpBase, MCPServerHttpBaseSettings
 
@@ -133,10 +132,10 @@ class MCPServerBrave(MCPServerHttpBase):
 
         return "\n\n".join(results_str) if results_str else "No web results found."
 
-    async def _register_tools(self, mcp_server: FastMCP):
+    async def _register_tools(self):
         """Registers the brave tool."""
 
-        @mcp_server.tool()
+        @self.mcp_server.tool()
         async def brave_web_search(
             query: str,
             count: int = 10,

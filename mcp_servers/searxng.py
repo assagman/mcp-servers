@@ -41,14 +41,14 @@ class SearXNGResponse(BaseModel):
 class SearXNGServerSettings(MCPServerHttpBaseSettings):
     SERVER_NAME: str = "MCP_SERVER_SEARXNG"
     HOST: str = Field(
-        default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_SEARXNG_HOST")
+        default="127.0.0.1", validation_alias=AliasChoices("MCP_SERVER_SEARXNG_HOST")
     )
     PORT: int = Field(
         default=8767, validation_alias=AliasChoices("MCP_SERVER_SEARXNG_PORT")
     )
 
     BASE_URL: HttpUrl = Field(
-        default=HttpUrl("http://0.0.0.0:8001"),
+        default=HttpUrl("http://127.0.0.1:8001"),
         validation_alias=AliasChoices("SEARXNG_BASE_URL"),
     )
     # USERNAME: Optional[str] = Field(default=None, validation_alias=AliasChoices("SEARXNG_USERNAME", "MCP_SERVER_SEARXNG_USERNAME"))

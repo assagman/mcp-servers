@@ -14,7 +14,7 @@ load_env_vars()
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
 
 if not os.environ.get("MCP_SERVER_BRAVE_HOST"):
-    os.environ["MCP_SERVER_BRAVE_HOST"] = "0.0.0.0"
+    os.environ["MCP_SERVER_BRAVE_HOST"] = "127.0.0.1"
 if not os.environ.get("MCP_SERVER_BRAVE_PORT"):
     os.environ["MCP_SERVER_BRAVE_PORT"] = "8766"
 

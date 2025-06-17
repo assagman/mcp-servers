@@ -24,7 +24,7 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
 
     SERVER_NAME: str = "MCP_SERVER_FILESYSTEM"
     HOST: str = Field(
-        default="0.0.0.0",
+        default="127.0.0.1",
         validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_HOST"),
         description="Hostname or IP address to bind the server to.",
     )

@@ -13,7 +13,7 @@ load_env_vars()
 
 assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined"
 if not os.environ.get("MCP_SERVER_FILESYSTEM_HOST"):
-    os.environ["MCP_SERVER_FILESYSTEM_HOST"] = "0.0.0.0"
+    os.environ["MCP_SERVER_FILESYSTEM_HOST"] = "127.0.0.1"
 if not os.environ.get("MCP_SERVER_FILESYSTEM_PORT"):
     os.environ["MCP_SERVER_FILESYSTEM_PORT"] = "8765"
 

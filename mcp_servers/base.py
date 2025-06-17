@@ -24,7 +24,7 @@ class BaseMCPServerSettings(BaseSettings):
     """Base settings for all MCP servers."""
 
     SERVER_NAME: str
-    HOST: str = "0.0.0.0"
+    HOST: str = "127.0.0.1"
     PORT: int
     LOG_LEVEL: int = logging.INFO
     HTTP_CLIENT_TIMEOUT: float = 60.0

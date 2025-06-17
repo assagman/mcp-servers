@@ -113,7 +113,7 @@ class TavilyCrawlApiResponse(BaseModel):
 class TavilyServerSettings(MCPServerHttpBaseSettings):
     SERVER_NAME: str = "MCP_SERVER_TAVILY"
     HOST: str = Field(
-        default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_TAVILY_HOST")
+        default="127.0.0.1", validation_alias=AliasChoices("MCP_SERVER_TAVILY_HOST")
     )
     PORT: int = Field(
         default=8768, validation_alias=AliasChoices("MCP_SERVER_TAVILY_PORT")

@@ -35,7 +35,7 @@ class BraveWebResponse(BaseModel):
 class BraveServerSettings(MCPServerHttpBaseSettings):
     SERVER_NAME: str = "MCP_SERVER_BRAVE"
     HOST: str = Field(
-        default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_BRAVE_HOST")
+        default="127.0.0.1", validation_alias=AliasChoices("MCP_SERVER_BRAVE_HOST")
     )
     PORT: int = Field(
         default=8766, validation_alias=AliasChoices("MCP_SERVER_BRAVE_PORT")

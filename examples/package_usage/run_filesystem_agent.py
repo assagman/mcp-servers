@@ -18,7 +18,6 @@ async def main():
     mcp_server_filesystem = MCPServerFilesystem()
     _ = await mcp_server_filesystem.start()
 
-
     system_prompt = """
     """
 

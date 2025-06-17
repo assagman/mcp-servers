@@ -23,6 +23,10 @@ def load_env_vars(dotenv_path: Optional[str] = str(DEFAULT_ENV_FILE)) -> None:
     """Loads environment variables from a .env file."""
     loaded = load_dotenv(dotenv_path=dotenv_path, override=True)
     if loaded:
-        _logger.info(f".env file loaded successfully from {dotenv_path or 'default location'}.")
+        _logger.info(
+            f".env file loaded successfully from {dotenv_path or 'default location'}."
+        )
     else:
-        _logger.warning("No .env file found or it was empty. Please consider running `mcpserver init`")
+        _logger.warning(
+            "No .env file found or it was empty. Please consider running `mcpserver init`"
+        )

@@ -23,7 +23,7 @@ async def main():
         f"http://{os.environ['MCP_SERVER_SEARXNG_HOST']}:{os.environ['MCP_SERVER_SEARXNG_PORT']}/sse"
     )
 
-    system_prompt = f"""
+    system_prompt = """
         You are an searxng search AI agent. You are allowed use MCP tools to perform web search.
 
         - Always generate a maningful query for searxng search and perform web search, obtain links and content.

@@ -54,4 +54,6 @@ mcpserver = "mcp_servers.cli_app:main"
 dev = [
     "build>=1.2.2",
     "twine>=5.1.1",
+    "ruff~=0.11.13",
+    "black~=25.1.0",
 ]

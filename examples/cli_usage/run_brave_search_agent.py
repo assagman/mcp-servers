@@ -25,7 +25,7 @@ async def main():
         f"http://{os.environ['MCP_SERVER_BRAVE_HOST']}:{os.environ['MCP_SERVER_BRAVE_PORT']}/sse"
     )
 
-    system_prompt = f"""
+    system_prompt = """
         You are an brave search AI agent. You are allowed use MCP tools to perform web search.
 
         - Always generate a maningful query for brave search and perform web search, obtain links and content.

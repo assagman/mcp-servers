@@ -19,12 +19,14 @@ class SearXNGResult(BaseModel):
     score: Optional[float] = None
     category: Optional[str] = None
 
+
 class SearXNGInfobox(BaseModel):
     infobox: Optional[str] = None
     id: Optional[str] = None
     content: Optional[str] = None
     links: Optional[List[Dict[str, str]]] = None
     img_src: Optional[str] = None
+
 
 class SearXNGResponse(BaseModel):
     query: Optional[str] = None
@@ -35,15 +37,28 @@ class SearXNGResponse(BaseModel):
     corrections: List[str] = Field(default_factory=list)
     unresponsive_engines: List[List[Any]] = Field(default_factory=list)
 
+
 class SearXNGServerSettings(MCPServerHttpBaseSettings):
     SERVER_NAME: str = "MCP_SERVER_SEARXNG"
-    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_SEARXNG_HOST"))
-    PORT: int = Field(default=8767, validation_alias=AliasChoices("MCP_SERVER_SEARXNG_PORT"))
+    HOST: str = Field(
+        default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_SEARXNG_HOST")
+    )
+    PORT: int = Field(
+        default=8767, validation_alias=AliasChoices("MCP_SERVER_SEARXNG_PORT")
+    )
 
-    BASE_URL: HttpUrl = Field(default=HttpUrl("http://0.0.0.0:8001"), validation_alias=AliasChoices("SEARXNG_BASE_URL"))
+    BASE_URL: HttpUrl = Field(
+        default=HttpUrl("http://0.0.0.0:8001"),
+        validation_alias=AliasChoices("SEARXNG_BASE_URL"),
+    )
     # USERNAME: Optional[str] = Field(default=None, validation_alias=AliasChoices("SEARXNG_USERNAME", "MCP_SERVER_SEARXNG_USERNAME"))
     # PASSWORD: Optional[str] = Field(default=None, validation_alias=AliasChoices("SEARXNG_PASSWORD", "MCP_SERVER_SEARXNG_PASSWORD"))
-    RATE_LIMIT_PER_SECOND: int | None = Field(default=20, validation_alias=AliasChoices("SEARXNG_RATE_LIMIT_PER_SECOND", "MCP_SERVER_SEARXNG_RATE_LIMIT_PER_SECOND"))
+    RATE_LIMIT_PER_SECOND: int | None = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "SEARXNG_RATE_LIMIT_PER_SECOND", "MCP_SERVER_SEARXNG_RATE_LIMIT_PER_SECOND"
+        ),
+    )
 
     model_config = MCPServerHttpBaseSettings.model_config
 
@@ -75,7 +90,9 @@ class MCPServerSearxng(MCPServerHttpBase):
         #     auth = httpx.BasicAuth(self.settings.USERNAME, self.settings.PASSWORD)
 
         return {
-            "base_url": str(self.settings.BASE_URL), # Convert HttpUrl to string for httpx
+            "base_url": str(
+                self.settings.BASE_URL
+            ),  # Convert HttpUrl to string for httpx
             "headers": {"Accept": "application/json"},
             # "auth": auth,
         }
@@ -99,7 +116,11 @@ class MCPServerSearxng(MCPServerHttpBase):
                 if info.img_src:
                     box_parts.append(f"Image: {info.img_src}")
                 if info.links:
-                    link_strs = [f"{link_dict['text']}: {link_dict['href']}" for link_dict in info.links if link_dict.get("text") and link_dict.get("href")]
+                    link_strs = [
+                        f"{link_dict['text']}: {link_dict['href']}"
+                        for link_dict in info.links
+                        if link_dict.get("text") and link_dict.get("href")
+                    ]
                     if link_strs:
                         box_parts.append("Links:\n  - " + "\n  - ".join(link_strs))
                 if box_parts:
@@ -107,7 +128,11 @@ class MCPServerSearxng(MCPServerHttpBase):
         if data.results:
             output_parts.append("\n--- Search Results ---")
             for i, result in enumerate(data.results, 1):
-                res_parts = [f"Result {i}:", f"  Title: {result.title}", f"  URL: {result.url}"]
+                res_parts = [
+                    f"Result {i}:",
+                    f"  Title: {result.title}",
+                    f"  URL: {result.url}",
+                ]
                 if result.content:
                     res_parts.append(f"  Snippet: {result.content}")
                 if result.engine:
@@ -128,10 +153,19 @@ class MCPServerSearxng(MCPServerHttpBase):
             elif isinstance(data.suggestions, list) and data.suggestions:
                 output_parts.append(f"  General: {', '.join(data.suggestions)}")
 
-        if not output_parts and not data.results and not data.infoboxes and not data.answers:
-             return "No results, infoboxes, answers, or suggestions found."
+        if (
+            not output_parts
+            and not data.results
+            and not data.infoboxes
+            and not data.answers
+        ):
+            return "No results, infoboxes, answers, or suggestions found."
 
-        return "\n\n".join(output_parts).strip() if output_parts else "No information found."
+        return (
+            "\n\n".join(output_parts).strip()
+            if output_parts
+            else "No information found."
+        )
 
     async def _perform_search(
         self,
@@ -140,7 +174,7 @@ class MCPServerSearxng(MCPServerHttpBase):
         categories: Optional[str] = None,
         language: str = "en",
     ) -> str:
-        search_endpoint = "search" # Relative to base_url
+        search_endpoint = "search"  # Relative to base_url
         params = {"q": query, "format": "json", "pageno": str(pageno)}
         if categories:
             params["categories"] = categories
@@ -150,7 +184,6 @@ class MCPServerSearxng(MCPServerHttpBase):
         json_data = await self._make_get_request_with_retry(search_endpoint, params)
         data = SearXNGResponse.model_validate(json_data)
         return self._format_searxng_results(data)
-
 
     async def _register_tools(self, mcp_server: FastMCP) -> None:
         """Registers the searxng tool."""
@@ -178,8 +211,10 @@ class MCPServerSearxng(MCPServerHttpBase):
             if not isinstance(pageno, int) or pageno < 1:
                 raise ValueError("Page number (pageno) must be a positive integer.")
             if categories is not None and not isinstance(categories, str):
-                raise ValueError("Categories must be a comma-separated string if provided.")
-            if not isinstance(language, str) or not language: # Basic check
+                raise ValueError(
+                    "Categories must be a comma-separated string if provided."
+                )
+            if not isinstance(language, str) or not language:  # Basic check
                 raise ValueError("Language must be a non-empty string.")
 
             try:
@@ -188,14 +223,24 @@ class MCPServerSearxng(MCPServerHttpBase):
                 # Here, `str` is not shadowed.
                 return await self._perform_search(query, pageno, categories, language)
             except MCPUpstreamServiceError as e:
-                self.logger.error(f"Upstream service error in searxng for query '{query}': {e}")
+                self.logger.error(
+                    f"Upstream service error in searxng for query '{query}': {e}"
+                )
                 return f"Error: Search failed due to an issue with the SearXNG service. Status: {e.status_code or 'N/A'}. Details: {e}"
             except MCPRateLimitError as e:
-                self.logger.warning(f"Rate limit hit in searxng for query '{query}': {e}")
-                return f"Error: Client-side rate limit hit. Please try again shortly. {e}"
-            except ValueError as e: # From input validation
-                 self.logger.warning(f"Validation error in searxng for query '{query}': {e}")
-                 return f"Error: Invalid input provided. {e}"
+                self.logger.warning(
+                    f"Rate limit hit in searxng for query '{query}': {e}"
+                )
+                return (
+                    f"Error: Client-side rate limit hit. Please try again shortly. {e}"
+                )
+            except ValueError as e:  # From input validation
+                self.logger.warning(
+                    f"Validation error in searxng for query '{query}': {e}"
+                )
+                return f"Error: Invalid input provided. {e}"
             except Exception as e:
-                self.logger.error(f"Unexpected error in searxng tool for query '{query}': {e}")
+                self.logger.error(
+                    f"Unexpected error in searxng tool for query '{query}': {e}"
+                )
                 return f"Error: An unexpected error occurred during search. Please check server logs. Type: {type(e).__name__}"

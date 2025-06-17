@@ -18,7 +18,7 @@ async def main():
     mcp_server_brave = MCPServerBrave()
     _ = await mcp_server_brave.start()
 
-    system_prompt = f"""
+    system_prompt = """
         You are an brave search AI agent. You are allowed use MCP tools to perform web search.
 
         - Always generate a maningful query for brave search and perform web search, obtain links and content.

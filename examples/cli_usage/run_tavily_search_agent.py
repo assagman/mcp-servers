@@ -24,7 +24,7 @@ async def main():
         f"http://{os.environ['MCP_SERVER_TAVILY_HOST']}:{os.environ['MCP_SERVER_TAVILY_PORT']}/sse"
     )
 
-    system_prompt = f"""
+    system_prompt = """
         You are an tavily search AI agent. You are allowed use MCP tools to perform web search, extraction url content, and crawling webpages recursively.
 
         - Always generate a maningful query for tavily search and perform web search, obtain links and extract content.

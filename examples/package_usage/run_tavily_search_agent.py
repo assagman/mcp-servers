@@ -19,7 +19,7 @@ async def main():
     mcp_server_tavily = MCPServerTavily()
     _ = await mcp_server_tavily.start()
 
-    system_prompt = f"""
+    system_prompt = """
         You are an tavily search AI agent. You are allowed use MCP tools to perform web search and extraction url content.
 
         - Always generate a maningful query for tavily search and perform web search, obtain links and extract content.

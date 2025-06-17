@@ -18,7 +18,7 @@ async def main():
     mcp_server_searxng = MCPServerSearxng()
     _ = await mcp_server_searxng.start()
 
-    system_prompt = f"""
+    system_prompt = """
         You are an searxng search AI agent. You are allowed use MCP tools to perform web search.
 
         - Always generate a maningful query for searxng search and perform web search, obtain links and content.

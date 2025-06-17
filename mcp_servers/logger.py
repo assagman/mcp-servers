@@ -5,9 +5,11 @@ from typing import Optional, Dict, Union
 import logging.config
 
 from colorama import Fore, Style, init as colorama_init
+
 colorama_init(autoreset=True)
 
 _DEFAULT_LOGGER_NAME = "mcp_servers"
+
 
 class ColoredFormatter(logging.Formatter):
     """
@@ -23,13 +25,13 @@ class ColoredFormatter(logging.Formatter):
     """
 
     COLORS: Dict[str, str] = {
-        'timestamp': Fore.LIGHTYELLOW_EX,
-        'name': Fore.LIGHTGREEN_EX,
-        'DEBUG': Fore.LIGHTCYAN_EX,
-        'INFO': Fore.CYAN,
-        'WARNING': Fore.YELLOW,
-        'ERROR': Fore.LIGHTRED_EX,
-        'CRITICAL': Fore.RED
+        "timestamp": Fore.LIGHTYELLOW_EX,
+        "name": Fore.LIGHTGREEN_EX,
+        "DEBUG": Fore.LIGHTCYAN_EX,
+        "INFO": Fore.CYAN,
+        "WARNING": Fore.YELLOW,
+        "ERROR": Fore.LIGHTRED_EX,
+        "CRITICAL": Fore.RED,
     }
 
     DEFAULT_FORMAT = "[%(levelname)s] - %(name)s - %(asctime)s: %(message)s"
@@ -56,23 +58,23 @@ class ColoredFormatter(logging.Formatter):
             bool: True if colors should be used, False otherwise.
         """
         # Check if output is a TTY
-        if not hasattr(sys.stdout, 'isatty') or not sys.stdout.isatty():
+        if not hasattr(sys.stdout, "isatty") or not sys.stdout.isatty():
             return False
 
         # Check for NO_COLOR environment variable (https://no-color.org/)
-        if os.environ.get('NO_COLOR'):
+        if os.environ.get("NO_COLOR"):
             return False
 
         # Check for FORCE_COLOR environment variable
-        if os.environ.get('FORCE_COLOR'):
+        if os.environ.get("FORCE_COLOR"):
             return True
 
         # Check if running in CI environment (common CI env vars)
-        ci_env_vars = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'JENKINS']
+        ci_env_vars = ["CI", "CONTINUOUS_INTEGRATION", "GITHUB_ACTIONS", "JENKINS"]
         if any(os.environ.get(var) for var in ci_env_vars):
-            return True # Often CI environments support color or capture it.
+            return True  # Often CI environments support color or capture it.
 
-        return True # Default to using colors if it's a TTY and not disabled.
+        return True  # Default to using colors if it's a TTY and not disabled.
 
     def format(self, record: logging.LogRecord) -> str:
         """
@@ -91,9 +93,13 @@ class ColoredFormatter(logging.Formatter):
         message = record.getMessage()  # Ensures any args are formatted into message
 
         if self.use_colors:
-            colored_timestamp = f"{self.COLORS['timestamp']}{timestamp}{Style.RESET_ALL}"
+            colored_timestamp = (
+                f"{self.COLORS['timestamp']}{timestamp}{Style.RESET_ALL}"
+            )
             colored_name = f"{self.COLORS['name']}{name}{Style.RESET_ALL}"
-            level_color = self.COLORS.get(levelname, Fore.WHITE) # Default color if level not in COLORS
+            level_color = self.COLORS.get(
+                levelname, Fore.WHITE
+            )  # Default color if level not in COLORS
             colored_level = f"{level_color}{levelname}{Style.RESET_ALL}"
         else:
             colored_timestamp = timestamp
@@ -112,7 +118,6 @@ class ColoredFormatter(logging.Formatter):
         return formatted_message
 
 
-
 class UvicornAccessFilter(logging.Filter):
     def filter(self, record):
         message = record.getMessage()
@@ -122,19 +127,21 @@ class UvicornAccessFilter(logging.Filter):
             method, path, _ = request_part.split(" ", 2)
             # Customize your criteria here
             should_log = (
-                method == "POST" and "/messages/" not in path
+                method == "POST"
+                and "/messages/" not in path
                 # or int(status_code) >= 400
             )
             return should_log
         except (IndexError, ValueError):
             return False
 
+
 class HttpxFilter(logging.Filter):
     def filter(self, record):
         message = record.getMessage()
         try:
             should_log = (
-                "POST" in message # and "/messages/" in path
+                "POST" in message  # and "/messages/" in path
                 and "messages" not in message
                 # or int(status_code) >= 400
             )
@@ -215,18 +222,17 @@ LOGGING_CONFIG = {
 logging.config.dictConfig(LOGGING_CONFIG)
 
 
-
 class MCPServersLogger:
     @staticmethod
     def get_logger(
         logger_name: str = _DEFAULT_LOGGER_NAME,
         level: Optional[Union[int, str]] = logging.INFO,
         log_file: Optional[str] = None,
-        propagate: bool = False  # Set to False for the main app logger to avoid duplicate root logs
+        propagate: bool = False,  # Set to False for the main app logger to avoid duplicate root logs
     ) -> logging.Logger:
         log = logging.getLogger(logger_name)
 
-        log.setLevel(level) # type: ignore
+        log.setLevel(level)  # type: ignore
         log.propagate = propagate
 
         # Clear any existing handlers to prevent duplication and allow reconfiguration
@@ -240,7 +246,7 @@ class MCPServersLogger:
         # Optional File Handler
         if log_file:
             try:
-                file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+                file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
                 # For files, a more detailed, non-colored format is often preferred.
                 file_formatter = logging.Formatter(
                     "%(asctime)s - %(name)s - [%(levelname)s] - %(message)s (%(filename)s:%(lineno)d)"
@@ -248,6 +254,9 @@ class MCPServersLogger:
                 file_handler.setFormatter(file_formatter)
                 log.addHandler(file_handler)
             except Exception as e:
-                log.error(f"Failed to set up file handler for logger '{logger_name}' at '{log_file}': {e}", exc_info=True)
+                log.error(
+                    f"Failed to set up file handler for logger '{logger_name}' at '{log_file}': {e}",
+                    exc_info=True,
+                )
 
         return log

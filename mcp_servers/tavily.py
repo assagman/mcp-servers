@@ -26,9 +26,7 @@ class TavilyApiResponse(BaseModel):
     images: Optional[List[str]] = None
 
 
-class TavilyExtractResultItem(
-    BaseModel
-):
+class TavilyExtractResultItem(BaseModel):
     """Represents a single successfully extracted URL's content."""
 
     url: HttpUrl
@@ -58,9 +56,7 @@ class TavilyExtractApiResponse(BaseModel):
     We will always send a list of URLs, so we expect `results` to be a list.
     """
 
-    results: List[
-        Union[TavilyExtractResultItem, TavilyExtractFailedItem]
-    ]
+    results: List[Union[TavilyExtractResultItem, TavilyExtractFailedItem]]
     response_time: Optional[float] = None
 
     @field_validator("results", mode="before")
@@ -116,11 +112,26 @@ class TavilyCrawlApiResponse(BaseModel):
 
 class TavilyServerSettings(MCPServerHttpBaseSettings):
     SERVER_NAME: str = "MCP_SERVER_TAVILY"
-    HOST: str = Field(default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_TAVILY_HOST"))
-    PORT: int = Field(default=8768, validation_alias=AliasChoices("MCP_SERVER_TAVILY_PORT"))
-    RATE_LIMIT_PER_SECOND: int = Field(default=20, validation_alias=AliasChoices("TAVILY_RATE_LIMIT_PER_SECOND", "MCP_SERVER_TAVILY_RATE_LIMIT_PER_SECOND"))
-    BASE_URL: HttpUrl = Field(default=HttpUrl("https://api.tavily.com"), validation_alias=AliasChoices("TAVILY_API_BASE_URL"))
-    TAVILY_API_KEY: str = Field(default_factory=lambda: os.environ["TAVILY_API_KEY"], validation_alias=AliasChoices("TAVILY_API_KEY"))
+    HOST: str = Field(
+        default="0.0.0.0", validation_alias=AliasChoices("MCP_SERVER_TAVILY_HOST")
+    )
+    PORT: int = Field(
+        default=8768, validation_alias=AliasChoices("MCP_SERVER_TAVILY_PORT")
+    )
+    RATE_LIMIT_PER_SECOND: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "TAVILY_RATE_LIMIT_PER_SECOND", "MCP_SERVER_TAVILY_RATE_LIMIT_PER_SECOND"
+        ),
+    )
+    BASE_URL: HttpUrl = Field(
+        default=HttpUrl("https://api.tavily.com"),
+        validation_alias=AliasChoices("TAVILY_API_BASE_URL"),
+    )
+    TAVILY_API_KEY: str = Field(
+        default_factory=lambda: os.environ["TAVILY_API_KEY"],
+        validation_alias=AliasChoices("TAVILY_API_KEY"),
+    )
 
     model_config = MCPServerHttpBaseSettings.model_config
 
@@ -136,6 +147,7 @@ class MCPServerTavily(MCPServerHttpBase):
     MCP Server for interacting with the Tavily AI Search API.
     Provides tools for web search and content extraction.
     """
+
     @property
     def settings(self):
         return cast(TavilyServerSettings, self._settings)
@@ -156,7 +168,7 @@ class MCPServerTavily(MCPServerHttpBase):
 
     def _get_http_client_config(self) -> Dict[str, Any]:
         """Configures the HTTP client for Brave Search API."""
-        settings: TavilyServerSettings = self.settings # type: ignore
+        settings: TavilyServerSettings = self.settings  # type: ignore
 
         return {
             "base_url": str(settings.BASE_URL),
@@ -207,9 +219,7 @@ class MCPServerTavily(MCPServerHttpBase):
                 output_parts.append(f"\n--- Item {i + 1} ---")
                 if isinstance(item, TavilyExtractResultItem):
                     output_parts.append(f"  URL: {item.url}")
-                    output_parts.append(
-                        f"  Extracted Content: {item.content}"
-                    )
+                    output_parts.append(f"  Extracted Content: {item.content}")
                     if item.images:
                         output_parts.append(f"  Images: {', '.join(item.images)}")
                 elif isinstance(item, TavilyExtractFailedItem):
@@ -217,12 +227,15 @@ class MCPServerTavily(MCPServerHttpBase):
                     output_parts.append(f"  Error: {item.error}")
                 else:  # Should not happen with Pydantic validation
                     output_parts.append("  URL: Unknown (parsing issue)")
-                    output_parts.append(f"  Content: Unexpected item type: {type(item)}")
+                    output_parts.append(
+                        f"  Content: Unexpected item type: {type(item)}"
+                    )
         except Exception as exp:
-            extract_result_parse_err_msg = f"Error while parsing extraction results: {exp}"
+            extract_result_parse_err_msg = (
+                f"Error while parsing extraction results: {exp}"
+            )
             self.logger.info(extract_result_parse_err_msg)
             return extract_result_parse_err_msg
-
 
         return "\n".join(output_parts)
 
@@ -303,9 +316,7 @@ class MCPServerTavily(MCPServerHttpBase):
             response_dict = await self._make_post_request_with_retry(
                 self.TAVILY_ENDPOINT, payload
             )
-            validated_response = TavilyApiResponse.model_validate(
-                response_dict
-            )
+            validated_response = TavilyApiResponse.model_validate(response_dict)
             return self._format_search_results(validated_response)
 
         @mcp_server.tool()
@@ -329,7 +340,10 @@ class MCPServerTavily(MCPServerHttpBase):
                 validated_url = HttpUrl(url_to_extract)
                 self.logger.info(f"Extracting URL: {validated_url}")
             except ValueError:
-                err_msg = f"Error: Invalid URL format provided: {url_to_extract}"f"Error: Invalid URL format provided: {url_to_extract}"
+                err_msg = (
+                    f"Error: Invalid URL format provided: {url_to_extract}"
+                    f"Error: Invalid URL format provided: {url_to_extract}"
+                )
                 self.logger.warning(err_msg)
                 return err_msg
 
@@ -342,9 +356,7 @@ class MCPServerTavily(MCPServerHttpBase):
                 return extract_depth_err_msg
 
             payload = {
-                "urls": [
-                    str(validated_url)
-                ],
+                "urls": [str(validated_url)],
                 "extract_depth": extract_depth,
                 "include_images": include_images_in_extract,
             }
@@ -357,7 +369,9 @@ class MCPServerTavily(MCPServerHttpBase):
                     response_dict
                 )
             except Exception as exp:
-                self.logger.warning(f"TavilyExtractApiResponse.model_validate failed: {exp}")
+                self.logger.warning(
+                    f"TavilyExtractApiResponse.model_validate failed: {exp}"
+                )
                 return str(exp)
 
             return self._format_extract_results(validated_response)
@@ -445,7 +459,5 @@ class MCPServerTavily(MCPServerHttpBase):
             response_dict = await self._make_post_request_with_retry(
                 self.TAVILY_CRAWL_ENDPOINT, payload
             )
-            validated_response = TavilyCrawlApiResponse.model_validate(
-                response_dict
-            )
+            validated_response = TavilyCrawlApiResponse.model_validate(response_dict)
             return self._format_crawl_results(validated_response)

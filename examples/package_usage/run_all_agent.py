@@ -20,7 +20,9 @@ assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined
 
 
 async def main():
-    mcp_server_filesystem = MCPServerFilesystem(host="localhost", port=8000, allowed_dir=Path.cwd())
+    mcp_server_filesystem = MCPServerFilesystem(
+        host="localhost", port=8000, allowed_dir=Path.cwd()
+    )
     _ = await mcp_server_filesystem.start()
 
     mcp_server_brave = MCPServerBrave(host="localhost", port=8001)

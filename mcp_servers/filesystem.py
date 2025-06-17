@@ -192,7 +192,6 @@ class MCPServerFilesystem(AbstractMCPServer):
                 f"{ERROR_PREFIX}Invalid path specified: '{relative_path_str}'. Error: {e}"
             ) from e
 
-
         # Final security check: The resolved path must be the allowed_dir itself or a descendant.
         # Path.is_relative_to() was added in Python 3.9.
         # For older Pythons, a common alternative is:
@@ -218,11 +217,13 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns the absolute path to the current working directory for file operations.
             All operations are sandboxed to this directory and its subdirectories.
             """
-            self.logger.info(f"Getting current working directory")
+            self.logger.info("Getting current working directory")
             return str(self.settings.ALLOWED_DIRECTORY)
 
         @mcp_server.tool()
-        async def list_directory(path: str = str(self.settings.ALLOWED_DIRECTORY)) -> Union[List[Dict[str, str]], str]:
+        async def list_directory(
+            path: str = str(self.settings.ALLOWED_DIRECTORY),
+        ) -> Union[List[Dict[str, str]], str]:
             """
             Lists files and directories at the given path, relative to the allowed working directory.
 
@@ -313,7 +314,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             return [str(Path(line)) for line in completed.stdout.splitlines()]
 
         @mcp_server.tool(
-            description=f"""
+            description="""
                 Get directory tree. To exclude directories, provide directory names as list of strings
             """,
         )
@@ -338,9 +339,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             exclude_dirs.extend(default_exclude_dirs)
 
             if max_depth > 10:
-                raise ValueError(
-                    "max_depth > 10 is not allowed"
-                )
+                raise ValueError("max_depth > 10 is not allowed")
 
             command = ["tree"]
             if exclude_dirs:
@@ -353,7 +352,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             command.extend([str(self.settings.ALLOWED_DIRECTORY)])
 
             try:
-                print(command)
+                self.logger.info(command)
                 result = subprocess.run(
                     command, capture_output=True, text=True, check=True
                 )
@@ -394,7 +393,9 @@ class MCPServerFilesystem(AbstractMCPServer):
                 return f"{ERROR_PREFIX}Could not read file '{path}': {e}"
 
         @mcp_server.tool()
-        async def write_file(path: str, content: str, create_parents: bool = False) -> str:
+        async def write_file(
+            path: str, content: str, create_parents: bool = False
+        ) -> str:
             """
             Writes content to a file at the given path, relative to the allowed working directory.
             Creates the file if it doesn't exist. Overwrites if it does.
@@ -411,23 +412,30 @@ class MCPServerFilesystem(AbstractMCPServer):
             try:
                 file_path = self._resolve_path_and_ensure_within_allowed(path)
 
-                if file_path.is_dir(): # Explicit check, though write_text would also fail
+                if (
+                    file_path.is_dir()
+                ):  # Explicit check, though write_text would also fail
                     return f"{ERROR_PREFIX}Path '{path}' is a directory. Cannot write file content to a directory."
 
                 parent_dir = file_path.parent
                 if not parent_dir.exists():
                     if create_parents:
                         # Ensure parent_dir is also within ALLOWED_DIRECTORY (implicitly checked by file_path)
-                        self.logger.info(f"Parent directory '{parent_dir}' for '{file_path}' does not exist. Creating.")
+                        self.logger.info(
+                            f"Parent directory '{parent_dir}' for '{file_path}' does not exist. Creating."
+                        )
                         parent_dir.mkdir(parents=True, exist_ok=True)
                     else:
                         return f"{ERROR_PREFIX}Parent directory for '{path}' does not exist. Use create_parents=True to create it."
-                elif not parent_dir.is_dir(): # Parent path exists but is not a directory
-                     return f"{ERROR_PREFIX}Parent path '{parent_dir.relative_to(self.settings.ALLOWED_DIRECTORY)}' for '{path}' is not a directory."
-
+                elif (
+                    not parent_dir.is_dir()
+                ):  # Parent path exists but is not a directory
+                    return f"{ERROR_PREFIX}Parent path '{parent_dir.relative_to(self.settings.ALLOWED_DIRECTORY)}' for '{path}' is not a directory."
 
                 file_path.write_text(content, encoding=STR_ENCODING)
-                self.logger.info(f"Successfully wrote {len(content)} bytes to file '{file_path}'.")
+                self.logger.info(
+                    f"Successfully wrote {len(content)} bytes to file '{file_path}'."
+                )
                 return f"Successfully wrote to file '{path}'."
             except ValueError as e:
                 self.logger.warning(f"ValueError in write_file for path '{path}': {e}")
@@ -451,7 +459,9 @@ class MCPServerFilesystem(AbstractMCPServer):
             """
             try:
                 source_abs = self._resolve_path_and_ensure_within_allowed(source_path)
-                dest_abs = self._resolve_path_and_ensure_within_allowed(destination_path)
+                dest_abs = self._resolve_path_and_ensure_within_allowed(
+                    destination_path
+                )
 
                 if not source_abs.exists():
                     return f"{ERROR_PREFIX}Source path '{source_path}' does not exist."
@@ -465,13 +475,20 @@ class MCPServerFilesystem(AbstractMCPServer):
                     final_dest_abs = dest_abs / source_abs.name
                     # Re-validate the final destination path to be absolutely sure
                     # This should already be safe if dest_abs was validated, but belt-and-suspenders.
-                    final_dest_abs_validated = self._resolve_path_and_ensure_within_allowed(
-                        str(final_dest_abs.relative_to(self.settings.ALLOWED_DIRECTORY))
+                    final_dest_abs_validated = (
+                        self._resolve_path_and_ensure_within_allowed(
+                            str(
+                                final_dest_abs.relative_to(
+                                    self.settings.ALLOWED_DIRECTORY
+                                )
+                            )
+                        )
                     )
-                    if final_dest_abs_validated.is_dir(): # Cannot overwrite a directory with a file implicitly
+                    if (
+                        final_dest_abs_validated.is_dir()
+                    ):  # Cannot overwrite a directory with a file implicitly
                         return f"{ERROR_PREFIX}Cannot overwrite directory '{final_dest_abs_validated.relative_to(self.settings.ALLOWED_DIRECTORY)}' with file '{source_path}'."
                     dest_abs = final_dest_abs_validated
-
 
                 if dest_abs.exists() and source_abs.is_dir() and dest_abs.is_file():
                     return f"{ERROR_PREFIX}Cannot overwrite file '{destination_path}' with directory '{source_path}'."
@@ -483,18 +500,25 @@ class MCPServerFilesystem(AbstractMCPServer):
                 if source_abs == dest_abs:
                     return f"Source and destination '{source_path}' are the same. No action taken."
 
-
                 shutil.move(str(source_abs), str(dest_abs))
                 self.logger.info(f"Successfully moved '{source_abs}' to '{dest_abs}'.")
                 return f"Successfully moved '{source_path}' to '{destination_path}'."
             except ValueError as e:
-                self.logger.warning(f"ValueError in move_item from '{source_path}' to '{destination_path}': {e}")
+                self.logger.warning(
+                    f"ValueError in move_item from '{source_path}' to '{destination_path}': {e}"
+                )
                 return str(e)
-            except shutil.Error as e: # Catches SameFileError etc.
-                self.logger.warning(f"Shutil error moving '{source_path}' to '{destination_path}': {e}", exc_info=True)
+            except shutil.Error as e:  # Catches SameFileError etc.
+                self.logger.warning(
+                    f"Shutil error moving '{source_path}' to '{destination_path}': {e}",
+                    exc_info=True,
+                )
                 return f"{ERROR_PREFIX}Failed to move '{source_path}' to '{destination_path}': {e}"
             except Exception as e:
-                self.logger.error(f"Error moving '{source_path}' to '{destination_path}': {e}", exc_info=True)
+                self.logger.error(
+                    f"Error moving '{source_path}' to '{destination_path}': {e}",
+                    exc_info=True,
+                )
                 return f"{ERROR_PREFIX}Could not move '{source_path}' to '{destination_path}': {e}"
 
         @mcp_server.tool()
@@ -543,15 +567,21 @@ class MCPServerFilesystem(AbstractMCPServer):
                     return f"{ERROR_PREFIX}Path '{path}' exists and is not a directory. Cannot create directory."
 
                 dir_path.mkdir(parents=True, exist_ok=True)
-                self.logger.info(f"Successfully created directory '{dir_path}' (or it already existed).")
+                self.logger.info(
+                    f"Successfully created directory '{dir_path}' (or it already existed)."
+                )
                 return (
                     f"Successfully created directory '{path}' (or it already existed)."
                 )
             except ValueError as e:
-                self.logger.warning(f"ValueError in create_directory for path '{path}': {e}")
+                self.logger.warning(
+                    f"ValueError in create_directory for path '{path}': {e}"
+                )
                 return str(e)
             except Exception as e:
-                self.logger.error(f"Error creating directory '{path}': {e}", exc_info=True)
+                self.logger.error(
+                    f"Error creating directory '{path}': {e}", exc_info=True
+                )
                 return f"{ERROR_PREFIX}Could not create directory '{path}': {e}"
 
         @mcp_server.tool()
@@ -579,19 +609,27 @@ class MCPServerFilesystem(AbstractMCPServer):
 
                 if recursive:
                     shutil.rmtree(dir_path)
-                    self.logger.info(f"Successfully deleted directory '{dir_path}' and its contents.")
+                    self.logger.info(
+                        f"Successfully deleted directory '{dir_path}' and its contents."
+                    )
                     return f"Successfully deleted directory '{path}' and its contents."
                 else:
-                    if any(dir_path.iterdir()): # Check if directory is empty
+                    if any(dir_path.iterdir()):  # Check if directory is empty
                         return f"{ERROR_PREFIX}Directory '{path}' is not empty. Use recursive=True to delete non-empty directories."
                     dir_path.rmdir()
-                    self.logger.info(f"Successfully deleted empty directory '{dir_path}'.")
+                    self.logger.info(
+                        f"Successfully deleted empty directory '{dir_path}'."
+                    )
                     return f"Successfully deleted empty directory '{path}'."
             except ValueError as e:
-                self.logger.warning(f"ValueError in delete_directory for path '{path}': {e}")
+                self.logger.warning(
+                    f"ValueError in delete_directory for path '{path}': {e}"
+                )
                 return str(e)
             except Exception as e:
-                self.logger.error(f"Error deleting directory '{path}': {e}", exc_info=True)
+                self.logger.error(
+                    f"Error deleting directory '{path}': {e}", exc_info=True
+                )
                 return f"{ERROR_PREFIX}Could not delete directory '{path}': {e}"
 
         @mcp_server.tool()
@@ -616,26 +654,31 @@ class MCPServerFilesystem(AbstractMCPServer):
 
                 # Convert timestamps to human-readable ISO format
                 # Note: ctime behavior varies by OS (creation time on Windows, metadata change time on Unix)
-                modified_time = datetime.datetime.fromtimestamp(stat_info.st_mtime, tz=datetime.timezone.utc).isoformat()
-                created_time = datetime.datetime.fromtimestamp(stat_info.st_ctime, tz=datetime.timezone.utc).isoformat()
+                modified_time = datetime.datetime.fromtimestamp(
+                    stat_info.st_mtime, tz=datetime.timezone.utc
+                ).isoformat()
+                created_time = datetime.datetime.fromtimestamp(
+                    stat_info.st_ctime, tz=datetime.timezone.utc
+                ).isoformat()
                 # For more accurate creation time on Unix, os.stat().st_birthtime (macOS, FreeBSD) might be available
                 # but st_ctime is more portable as a "change time" / "birth time on Windows"
                 try:
                     # Python 3.7+ on some OSes
                     birth_time_ts = stat_info.st_birthtime
-                    created_time = datetime.datetime.fromtimestamp(birth_time_ts, tz=datetime.timezone.utc).isoformat()
+                    created_time = datetime.datetime.fromtimestamp(
+                        birth_time_ts, tz=datetime.timezone.utc
+                    ).isoformat()
                 except AttributeError:
-                    pass # st_birthtime not available, use st_ctime as fallback
-
+                    pass  # st_birthtime not available, use st_ctime as fallback
 
                 metadata = {
                     "name": target_path.name,
-                    "relative_path": path, # The user-provided relative path
+                    "relative_path": path,  # The user-provided relative path
                     "absolute_path": str(target_path),
                     "type": item_type,
                     "size_bytes": stat_info.st_size,
                     "modified_time_utc": modified_time,
-                    "created_time_utc": created_time, # Or metadata_changed_time_utc on some Unix
+                    "created_time_utc": created_time,  # Or metadata_changed_time_utc on some Unix
                     "is_symlink": target_path.is_symlink(),
                 }
                 if target_path.is_symlink():
@@ -644,14 +687,19 @@ class MCPServerFilesystem(AbstractMCPServer):
                     except OSError:
                         metadata["symlink_target"] = "[Error reading link target]"
 
-
                 self.logger.debug(f"Retrieved metadata for '{target_path}'.")
                 return metadata
             except ValueError as e:
-                self.logger.warning(f"ValueError in get_item_metadata for path '{path}': {e}")
+                self.logger.warning(
+                    f"ValueError in get_item_metadata for path '{path}': {e}"
+                )
                 return str(e)
             except Exception as e:
-                self.logger.error(f"Error getting metadata for '{path}': {e}", exc_info=True)
+                self.logger.error(
+                    f"Error getting metadata for '{path}': {e}", exc_info=True
+                )
                 return f"{ERROR_PREFIX}Could not get metadata for '{path}': {e}"
 
-        self.logger.info(f"Successfully registered tools for {self.settings.SERVER_NAME}.")
+        self.logger.info(
+            f"Successfully registered tools for {self.settings.SERVER_NAME}."
+        )

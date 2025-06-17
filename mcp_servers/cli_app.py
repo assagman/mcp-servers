@@ -77,7 +77,8 @@ def initialize_config(subcommand: str, force: bool):
 
     if not DEFAULT_SEARXNG_SETTINGS_FILE.exists() and subcommand in ["all", "searxng"]:
         with open(DEFAULT_SEARXNG_SETTINGS_FILE, "w") as f:
-            f.write(f"""
+            f.write(
+                f"""
 use_default_settings: true
 
 server:
@@ -92,7 +93,8 @@ search:
 engines:
   - name: startpage
     disabled: true
-            """)
+            """
+            )
     else:
         print("Skipped init for searxng")
 

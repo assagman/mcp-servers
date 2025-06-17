@@ -21,25 +21,28 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
     Configuration settings for the MCPServerFilesystem.
     Settings can be provided via environment variables (e.g., MCP_SERVER_FILESYSTEM_HOST).
     """
+
     SERVER_NAME: str = "MCP_SERVER_FILESYSTEM"
     HOST: str = Field(
         default="0.0.0.0",
         validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_HOST"),
-        description="Hostname or IP address to bind the server to."
+        description="Hostname or IP address to bind the server to.",
     )
     PORT: int = Field(
         default=8765,
         validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_PORT"),
-        description="Port number for the server to listen on."
+        description="Port number for the server to listen on.",
     )
     ALLOWED_DIRECTORY: Path = Field(
         default_factory=lambda: Path(tempfile.mkdtemp(prefix="mcp_fs_")),
-        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_ALLOWED_DIR", "FS_ALLOWED_DIR"),
+        validation_alias=AliasChoices(
+            "MCP_SERVER_FILESYSTEM_ALLOWED_DIR", "FS_ALLOWED_DIR"
+        ),
         description=(
             "The root directory within which all file operations are sandboxed. "
             "If not specified, a temporary directory will be created. "
             "The path will be resolved to an absolute path."
-        )
+        ),
     )
 
     @field_validator("ALLOWED_DIRECTORY", mode="before")
@@ -49,22 +52,29 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
         logger = MCPServersLogger.get_logger()
         if isinstance(v, str):
             try:
-                if not v: # empty value = tmp folder
+                if not v:  # empty value = tmp folder
                     path = Path(tempfile.mkdtemp(prefix="mcp_fs_"))
                 else:
                     path = Path(v).expanduser().resolve()
+
+                # always resolve path
+                path = path.expanduser().resolve()
                 logger.debug(f"Converted string path '{v}' to '{path}'")
                 return path
             except Exception as e:
                 logger.error(f"Error resolving path string '{v}': {e}")
-                raise ValueError(f"Invalid path string for ALLOWED_DIRECTORY: {v}. Error: {e}") from e
+                raise ValueError(
+                    f"Invalid path string for ALLOWED_DIRECTORY: {v}. Error: {e}"
+                ) from e
         if isinstance(v, Path):
             logger.info("Given ALLOWED_DIR is Path")
-            return v.expanduser().resolve() # Ensure even Path objects are fully resolved
+            return (
+                v.expanduser().resolve()
+            )  # Ensure even Path objects are fully resolved
         raise TypeError("ALLOWED_DIRECTORY must be a string or Path object.")
 
     @model_validator(mode="after")
-    def _ensure_allowed_directory_is_valid(self) -> 'MCPServerFilesystemSettings':
+    def _ensure_allowed_directory_is_valid(self) -> "MCPServerFilesystemSettings":
         """
         Validate that the ALLOWED_DIRECTORY is an existing, absolute directory
         after all field validations have run.
@@ -74,7 +84,9 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
         if not path.is_absolute():
             # This should ideally be caught by resolve() in the field_validator,
             # but as a safeguard:
-            logger.warning(f"ALLOWED_DIRECTORY '{path}' was not absolute, resolving again.")
+            logger.warning(
+                f"ALLOWED_DIRECTORY '{path}' was not absolute, resolving again."
+            )
             path = path.resolve()
             self.ALLOWED_DIRECTORY = path
 

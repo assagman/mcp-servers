@@ -193,9 +193,7 @@ class MCPServerTavily(MCPServerHttpBase):
                 output_parts.append(f"  Content Snippet: {result.content}")
                 output_parts.append(f"  Relevance Score: {result.score}")
                 if result.raw_content:
-                    output_parts.append(
-                        f"  Raw Content Snippet (first 200 chars): {result.raw_content[:200]}..."
-                    )
+                    output_parts.append(f"  Raw Content : {result.raw_content}...")
                 if result.images:
                     output_parts.append(f"  Images: {', '.join(result.images)}")
         return "\n".join(output_parts)
@@ -244,9 +242,7 @@ class MCPServerTavily(MCPServerHttpBase):
         for i, item in enumerate(response.results):
             output_parts.append(f"\n--- Crawled Page {i + 1} ---")
             output_parts.append(f"  URL: {item.url}")
-            output_parts.append(
-                f"  Raw Content (first 300 chars): {item.raw_content[:300]}..."
-            )
+            output_parts.append(f"  Raw Content: {item.raw_content}...")
         if response.response_time:
             output_parts.append(f"\nResponse Time: {response.response_time:.2f}s")
         return "\n".join(output_parts)

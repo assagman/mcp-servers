@@ -38,7 +38,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "pydantic-ai==0.2.18",
+    "pydantic-ai==0.3.1",
     "python-daemon",
     "colorama"
 ]

@@ -382,6 +382,7 @@ class MCPServerFilesystem(AbstractMCPServer):
 
         default_exclude_dirs = [
             ".venv",
+            "dist",
             "__pycache__",
             "node_modules",
         ]

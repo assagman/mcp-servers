@@ -28,6 +28,7 @@ async def chatify(agent: Agent):
             lines.append(line)
         user_multiline_input = "\n".join(lines)
 
+        print("[AI]: \n")
         result = await agent.run(user_multiline_input, message_history=message_history)
         print(result.output)
         print()

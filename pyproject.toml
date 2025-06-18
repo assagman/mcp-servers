@@ -56,6 +56,6 @@ dev = [
     "twine>=5.1.1",
     "ruff~=0.11.13",
     "black~=25.1.0",
-    "pre-commit",
+    "pre-commit~=4.2.0",
     "psutil~=7.0.0",
 ]

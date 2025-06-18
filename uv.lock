@@ -724,7 +724,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = "~=25.1.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.2" },
     { name = "colorama" },
-    { name = "pre-commit", marker = "extra == 'dev'" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = "~=4.2.0" },
     { name = "psutil", marker = "extra == 'dev'", specifier = "~=7.0.0" },
     { name = "pydantic-ai", specifier = "==0.2.18" },
     { name = "python-daemon" },

@@ -66,7 +66,7 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
                     f"Invalid path string for ALLOWED_DIRECTORY: {v}. Error: {e}"
                 ) from e
         if isinstance(v, Path):
-            logger.info("Given ALLOWED_DIR is Path")
+            logger.debug("Given ALLOWED_DIR is Path")
             return (
                 v.expanduser().resolve()
             )  # Ensure even Path objects are fully resolved
@@ -225,7 +225,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 A list of dictionaries, each with 'name' and 'type' ('file' or 'directory'),
                 or an error string if the operation fails.
             """
-            self.logger.debug(f"Listing contents of directory: {path}")
+            self.logger.info(f"Listing contents of directory: {path}")
 
             try:
                 target_path = self._resolve_path_and_ensure_within_allowed(path)
@@ -248,7 +248,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                             "type": "directory" if item.is_dir() else "file",
                         }
                     )
-                self.logger.debug(
+                self.logger.info(
                     f"Listed directory '{target_path}', found {len(entries)} items."
                 )
                 return entries
@@ -265,7 +265,7 @@ class MCPServerFilesystem(AbstractMCPServer):
 
         @self.mcp_server.tool()
         def find_file_in_project(filename: str):
-            self.logger.debug(f"Finding file: {filename}")
+            self.logger.info(f"Finding file: {filename}")
             exclude_directories = [
                 ".venv",
                 "__pycache__",
@@ -290,7 +290,7 @@ class MCPServerFilesystem(AbstractMCPServer):
 
         @self.mcp_server.tool()
         def get_files_containing_text(text: str):
-            self.logger.debug(f"Searching for text '{text}' in project files.")
+            self.logger.info(f"Searching for text '{text}' in project files.")
             cmd = [
                 "rg",
                 "-il",
@@ -336,7 +336,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             exclude_dirs: List[str] = [],
             max_depth: int = 4,
         ):
-            self.logger.debug(
+            self.logger.info(
                 f"Getting directory tree with exclude_dirs: {exclude_dirs}, max_depth: {max_depth}"
             )
             if not exclude_dirs:
@@ -403,7 +403,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 The content of the file as a string, or an error string if the operation fails.
             """
-            self.logger.debug(f"Reading file: {path}")
+            self.logger.info(f"Reading file: {path}")
             try:
                 file_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not file_path.exists():
@@ -441,7 +441,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
-            self.logger.debug(
+            self.logger.info(
                 f"Writing to file: {path}, create_parents: {create_parents}"
             )
             try:
@@ -499,7 +499,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
-            self.logger.debug(f"Moving item from {source_path} to {destination_path}")
+            self.logger.info(f"Moving item from {source_path} to {destination_path}")
             try:
                 source_abs = self._resolve_path_and_ensure_within_allowed(source_path)
                 dest_abs = self._resolve_path_and_ensure_within_allowed(
@@ -593,7 +593,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
-            self.logger.debug(f"Deleting file: {path}")
+            self.logger.info(f"Deleting file: {path}")
             try:
                 file_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not file_path.exists():
@@ -625,7 +625,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
-            self.logger.debug(f"Creating directory: {path}")
+            self.logger.info(f"Creating directory: {path}")
             try:
                 dir_path = self._resolve_path_and_ensure_within_allowed(path)
                 if dir_path.exists() and not dir_path.is_dir():
@@ -663,7 +663,7 @@ class MCPServerFilesystem(AbstractMCPServer):
             Returns:
                 A success message or an error string.
             """
-            self.logger.debug(f"Deleting directory: {path}, recursive: {recursive}")
+            self.logger.info(f"Deleting directory: {path}, recursive: {recursive}")
             try:
                 dir_path = self._resolve_path_and_ensure_within_allowed(path)
 
@@ -723,7 +723,7 @@ class MCPServerFilesystem(AbstractMCPServer):
                 A dictionary containing metadata (name, path, type, size, modified_time, created_time, absolute_path)
                 or an error string if the operation fails. Times are in ISO 8601 format.
             """
-            self.logger.debug(f"Getting metadata for: {path}")
+            self.logger.info(f"Getting metadata for: {path}")
             try:
                 target_path = self._resolve_path_and_ensure_within_allowed(path)
                 if not target_path.exists():

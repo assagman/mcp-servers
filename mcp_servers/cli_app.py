@@ -221,8 +221,8 @@ async def start_server(args):
 
             server = MCPServerFilesystem()
             try:
-                server_task = await server.start()
-                await server_task
+                await server.start()
+                await server.await_server_task()
             except KeyboardInterrupt:
                 print("\nServer shutting down...")
                 await server.stop()
@@ -237,8 +237,8 @@ async def start_server(args):
 
             server = MCPServerBrave()
             try:
-                server_task = await server.start()
-                await server_task
+                await server.start()
+                await server.await_server_task()
             except KeyboardInterrupt:
                 print("\nServer shutting down...")
                 await server.stop()
@@ -253,8 +253,8 @@ async def start_server(args):
 
             server = MCPServerSearxng()
             try:
-                server_task = await server.start()
-                await server_task
+                await server.start()
+                await server.await_server_task()
             except KeyboardInterrupt:
                 print("\nServer shutting down...")
                 await server.stop()
@@ -267,8 +267,8 @@ async def start_server(args):
 
             server = MCPServerTavily()
             try:
-                server_task = await server.start()
-                await server_task
+                await server.start()
+                await server.await_server_task()
             except KeyboardInterrupt:
                 print("\nServer shutting down...")
                 await server.stop()

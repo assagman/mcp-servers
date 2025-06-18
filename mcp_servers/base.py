@@ -22,10 +22,11 @@ from mcp_servers import DEFAULT_ENV_FILE
 
 
 class MCPServer(FastMCP):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.server: Server
-        self.server_task: Task
+        self.server: Optional[Server] = None
+        self.server_task: Optional[Task] = None
 
     async def run_streamable_http_async(self) -> None:
         """Run the server using StreamableHTTP transport."""
@@ -167,8 +168,6 @@ class AbstractMCPServer(ABC):
         while not self.mcp_server.server.started:
             await asyncio.sleep(0.1)
 
-        return self.mcp_server.server_task
-
     async def stop(self):
         try:
             if (
@@ -182,6 +181,12 @@ class AbstractMCPServer(ABC):
         except Exception as exp:
             print("unknown exception occured while stopping Streamable HTTP server")
             self.logger.exception(exp)
+
+    async def await_server_task(self):
+        if self.mcp_server.server_task:
+            await self.mcp_server.server_task
+        else:
+            self.logger.warning("There is no active server task to await")
 
     def get_mcp_server_streamable_http(self) -> MCPServerStreamableHTTP:
         """Returns an MCPServerHTTP client configuration for this server."""

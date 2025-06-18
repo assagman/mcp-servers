@@ -254,13 +254,16 @@ class MCPServerFilesystem(AbstractMCPServer):
     def _find_files_in_current_working_directory(
         self,
         filename: str,
+        exact_match: bool = True,
     ) -> List[str]:
         """
-        Search and return all files matching with given filename. This tool
+        Search and return all files matching with given filename recursively in cwd. This tool
         uses `fd` and it's expected as executable in the system.
 
         Args:
-            filename (str): Exact filename to search.
+            filename (str): Filename to search.
+            exact_match (bool): Specifies if the name should be searched exactly or not.
+                Like patterns: name vs ^name$
 
         Returns:
             A list of paths, each corresponds to relative paths to the current
@@ -274,13 +277,18 @@ class MCPServerFilesystem(AbstractMCPServer):
             "node_modules",
         ]
 
+        if exact_match:
+            filename_pattern = f"^{filename}$"
+        else:
+            filename_pattern = filename
+
         cmd = [
             "fd",  # fd executable
             "-Hi",  # --hidden, --ignore-case
             "-t",  # type
             "f",  # file
             *[f"-E {d}" for d in default_exclude_dirs],  # exclude dirs
-            filename,
+            filename_pattern,
             ".",
         ]
         self.logger.debug(" ".join(cmd))

@@ -181,68 +181,67 @@ class MCPServerSearxng(MCPServerHttpBase):
         data = SearXNGResponse.model_validate(json_data)
         return self._format_searxng_results(data)
 
+    async def _search_web_via_searxng(
+        self,
+        query: str,
+        pageno: int = 1,
+        categories: Optional[str] = None,
+        language: str = "en",
+    ) -> str:
+        """
+        Perform a search using a self-hosted SearXNG instance.
+        Args:
+            query (str): The search query.
+            pageno (int): Page number for results (default: 1).
+            categories (Optional[str]): Comma-separated SearXNG categories (e.g., "general,news").
+            language (str): Language code for search (e.g., "en", default: "en").
+        Returns:
+            str: Formatted search results or an error message.
+        """
+        self.logger.debug(f"SearXNG tool called with query: {query}")
+        # Basic input validation
+        if not isinstance(query, str) or not query.strip():
+            self.logger.warning("SearXNG: Query must be a non-empty string.")
+            raise ValueError("Query must be a non-empty string.")
+        if not isinstance(pageno, int) or pageno < 1:
+            self.logger.warning("SearXNG: Page number must be a positive integer.")
+            raise ValueError("Page number (pageno) must be a positive integer.")
+        if categories is not None and not isinstance(categories, str):
+            self.logger.warning(
+                "SearXNG: Categories must be a comma-separated string if provided."
+            )
+            raise ValueError("Categories must be a comma-separated string if provided.")
+        if not isinstance(language, str) or not language:  # Basic check
+            self.logger.warning("SearXNG: Language must be a non-empty string.")
+            raise ValueError("Language must be a non-empty string.")
+
+        try:
+            result = await self._perform_search(query, pageno, categories, language)
+            self.logger.info(f"SearXNG tool returned result for query: {query}")
+            return result
+        except MCPUpstreamServiceError as e:
+            self.logger.error(
+                f"Upstream service error in searxng for query '{query}': {e}"
+            )
+            return f"Error: Search failed due to an issue with the SearXNG service. Status: {e.status_code or 'N/A'}. Details: {e}"
+        except MCPRateLimitError as e:
+            self.logger.warning(f"Rate limit hit in searxng for query '{query}': {e}")
+            return f"Error: Client-side rate limit hit. Please try again shortly. {e}"
+        except ValueError as e:  # From input validation
+            self.logger.warning(f"Validation error in searxng for query '{query}': {e}")
+            return f"Error: Invalid input provided. {e}"
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error in searxng tool for query '{query}': {e}"
+            )
+            return f"Error: An unexpected error occurred during search. Please check server logs. Type: {type(e).__name__}"
+
     async def _register_tools(self) -> None:
         """Registers the searxng tool."""
-
-        @self.mcp_server.tool()
-        async def searxng(
-            query: str,
-            pageno: int = 1,
-            categories: Optional[str] = None,
-            language: str = "en",
-        ) -> str:
-            """
-            Performs a search using a self-hosted SearXNG instance.
-            Args:
-                query (str): The search query.
-                pageno (int): Page number for results (default: 1).
-                categories (Optional[str]): Comma-separated SearXNG categories (e.g., "general,news").
-                language (str): Language code for search (e.g., "en", default: "en").
-            Returns:
-                str: Formatted search results or an error message.
-            """
-            self.logger.debug(f"SearXNG tool called with query: {query}")
-            # Basic input validation
-            if not isinstance(query, str) or not query.strip():
-                self.logger.warning("SearXNG: Query must be a non-empty string.")
-                raise ValueError("Query must be a non-empty string.")
-            if not isinstance(pageno, int) or pageno < 1:
-                self.logger.warning("SearXNG: Page number must be a positive integer.")
-                raise ValueError("Page number (pageno) must be a positive integer.")
-            if categories is not None and not isinstance(categories, str):
-                self.logger.warning(
-                    "SearXNG: Categories must be a comma-separated string if provided."
-                )
-                raise ValueError(
-                    "Categories must be a comma-separated string if provided."
-                )
-            if not isinstance(language, str) or not language:  # Basic check
-                self.logger.warning("SearXNG: Language must be a non-empty string.")
-                raise ValueError("Language must be a non-empty string.")
-
-            try:
-                result = await self._perform_search(query, pageno, categories, language)
-                self.logger.info(f"SearXNG tool returned result for query: {query}")
-                return result
-            except MCPUpstreamServiceError as e:
-                self.logger.error(
-                    f"Upstream service error in searxng for query '{query}': {e}"
-                )
-                return f"Error: Search failed due to an issue with the SearXNG service. Status: {e.status_code or 'N/A'}. Details: {e}"
-            except MCPRateLimitError as e:
-                self.logger.warning(
-                    f"Rate limit hit in searxng for query '{query}': {e}"
-                )
-                return (
-                    f"Error: Client-side rate limit hit. Please try again shortly. {e}"
-                )
-            except ValueError as e:  # From input validation
-                self.logger.warning(
-                    f"Validation error in searxng for query '{query}': {e}"
-                )
-                return f"Error: Invalid input provided. {e}"
-            except Exception as e:
-                self.logger.error(
-                    f"Unexpected error in searxng tool for query '{query}': {e}"
-                )
-                return f"Error: An unexpected error occurred during search. Please check server logs. Type: {type(e).__name__}"
+        self._register_mcp_server_tool(
+            self._search_web_via_searxng,
+            read_only=True,
+            destructive=False,
+            idempotent=True,
+            open_world=True,
+        )

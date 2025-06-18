@@ -131,64 +131,69 @@ class MCPServerBrave(MCPServerHttpBase):
 
         return "\n\n".join(results_str) if results_str else "No web results found."
 
+    async def _search_web_via_brave(
+        self,
+        query: str,
+        count: int = 10,
+        offset: int = 0,
+        search_lang: str = "en",
+        freshness: str = "",
+    ) -> str:
+        """
+        Perform a web search using the Brave Search API, ideal for general queries, news, articles, and online content.
+        Use this for broad information gathering, recent events, or when you need diverse web sources.
+        Supports pagination, content filtering, and freshness controls.
+        Maximum 20 results per request, with offset for pagination.
+
+        Args:
+            query (str): Search query (max 400 chars, 50 words).
+            count (int): Number of results (1-20, default 10).
+            offset (int): Pagination offset (default 0, Brave API docs suggest max of 9 for some contexts but API may support more).
+            search_lang (str): Search language
+            freshness: Filters search results by when they were discovered.
+                The following values are supported:
+                    pd: Discovered within the last 24 hours.
+                    pw: Discovered within the last 7 Days.
+                    pm: Discovered within the last 31 Days.
+                    py: Discovered within the last 365 Days.
+                    YYYY-MM-DDtoYYYY-MM-DD: timeframe is also supported by specifying the date range e.g. 2022-04-01to2022-07-30.
+
+        Returns:
+            str: A string containing the formatted search results, or an error message.
+        """
+        self.logger.debug(f"Brave web search tool called with query: {query}")
+        if not isinstance(query, str) or not query.strip():
+            self.logger.warning("Brave search: Query must be a non-empty string.")
+            raise ValueError("Query must be a non-empty string.")
+        if not isinstance(count, int) or not (1 <= count <= 20):
+            self.logger.warning(
+                "Brave search: Count must be an integer between 1 and 20."
+            )
+            raise ValueError("Count must be an integer between 1 and 20.")
+        if not isinstance(offset, int) or offset < 0:
+            self.logger.warning("Brave search: Offset must be a non-negative integer.")
+            raise ValueError("Offset must be a non-negative integer.")
+
+        try:
+            result = await self._perform_web_search(
+                query, count, offset, search_lang, freshness
+            )
+            self.logger.info(
+                f"Brave web search tool returned result for query: {query}"
+            )
+            return result
+        except Exception as e:
+            self.logger.error(
+                f"ERROR in brave_web_search for query '{query}': {e}", exc_info=True
+            )
+            raise
+
     async def _register_tools(self):
-        """Registers the brave tool."""
-
-        @self.mcp_server.tool()
-        async def brave_web_search(
-            query: str,
-            count: int = 10,
-            offset: int = 0,
-            search_lang: str = "en",
-            freshness: str = "",
-        ) -> str:
-            """
-            Performs a web search using the Brave Search API, ideal for general queries, news, articles, and online content.
-            Use this for broad information gathering, recent events, or when you need diverse web sources.
-            Supports pagination, content filtering, and freshness controls.
-            Maximum 20 results per request, with offset for pagination.
-
-            Args:
-                query (str): Search query (max 400 chars, 50 words).
-                count (int): Number of results (1-20, default 10).
-                offset (int): Pagination offset (default 0, Brave API docs suggest max of 9 for some contexts but API may support more).
-                search_lang (str): Search language
-                freshness: Filters search results by when they were discovered.
-                    The following values are supported:
-                        pd: Discovered within the last 24 hours.
-                        pw: Discovered within the last 7 Days.
-                        pm: Discovered within the last 31 Days.
-                        py: Discovered within the last 365 Days.
-                        YYYY-MM-DDtoYYYY-MM-DD: timeframe is also supported by specifying the date range e.g. 2022-04-01to2022-07-30.
-
-            Returns:
-                str: A string containing the formatted search results, or an error message.
-            """
-            self.logger.debug(f"Brave web search tool called with query: {query}")
-            if not isinstance(query, str) or not query.strip():
-                self.logger.warning("Brave search: Query must be a non-empty string.")
-                raise ValueError("Query must be a non-empty string.")
-            if not isinstance(count, int) or not (1 <= count <= 20):
-                self.logger.warning(
-                    "Brave search: Count must be an integer between 1 and 20."
-                )
-                raise ValueError("Count must be an integer between 1 and 20.")
-            if not isinstance(offset, int) or offset < 0:
-                self.logger.warning(
-                    "Brave search: Offset must be a non-negative integer."
-                )
-                raise ValueError("Offset must be a non-negative integer.")
-
-            try:
-                result = await self._perform_web_search(
-                    query, count, offset, search_lang, freshness
-                )
-                self.logger.info(
-                    f"Brave web search tool returned result for query: {query}"
-                )
-                return result
-            except Exception as e:
-                self.logger.error(
-                    f"ERROR in brave_web_search for query '{query}': {e}", exc_info=True
-                )
-                raise
+        """Register the brave tool."""
+        self._register_mcp_server_tool(
+            self._search_web_via_brave,
+            read_only=True,
+            destructive=False,
+            idempotent=True,
+            open_world=True,
+        )

@@ -251,259 +251,289 @@ class MCPServerTavily(MCPServerHttpBase):
             output_parts.append(f"\nResponse Time: {response.response_time:.2f}s")
         return "\n".join(output_parts)
 
+    async def _search_web_via_tavily(
+        self,
+        query: str,
+        search_depth: Optional[str] = None,
+        include_answer: bool = False,
+        include_raw_content: bool = False,
+        max_results: int = 5,
+        include_domains: Optional[List[str]] = None,
+        exclude_domains: Optional[List[str]] = None,
+        include_images: bool = False,
+        days_published_ago: Optional[int] = None,
+    ) -> str:
+        """
+        Perform a search using the Tavily AI API.
+        Ideal for comprehensive research, finding factual information, and getting direct answers.
+
+        Args:
+            query (str): The search query.
+            search_depth (str): "basic" for quick results, "advanced" for thorough research. Defaults to "basic".
+            include_answer (bool): If True, attempts to provide a direct answer. Defaults to False.
+            include_raw_content (bool): If True, includes snippets of raw web content. Defaults to False.
+            max_results (int): Max number of results (1-20, API default is 5). Defaults to 5.
+            include_domains (Optional[List[str]]): Domains to focus on (e.g., ["wikipedia.org", "bbc.com"]).
+            exclude_domains (Optional[List[str]]): Domains to exclude.
+            include_images (bool): If True, includes image URLs in results. Defaults to False.
+            days_published_ago (Optional[int]): Filters results published within the last N days (e.g., 7 for last week).
+
+        Returns:
+            str: Formatted search results or an error message.
+        """
+        self.logger.info(
+            f"Tavily search tool called with query: {query}, depth: {search_depth}"
+        )
+        if not isinstance(query, str) or not query.strip():
+            self.logger.warning("Tavily search: Query must be a non-empty string.")
+            return "Error: Query must be a non-empty string."
+
+        if not search_depth:
+            search_depth = self.SEARCH_DEPTH_BASIC
+
+        if search_depth not in [
+            self.SEARCH_DEPTH_BASIC,
+            self.SEARCH_DEPTH_ADVANCED,
+        ]:
+            self.logger.warning(
+                f"Tavily search: Invalid search_depth '{search_depth}'. It must be must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
+            )
+            self.logger.warning("Setting extract depth to BASIC")
+            search_depth = self.SEARCH_DEPTH_BASIC
+        if not (1 <= max_results <= 20):
+            self.logger.warning(
+                f"Tavily search: max_results '{max_results}' must be between 1 and 20."
+            )
+            return "Error: max_results must be between 1 and 20."
+        if days_published_ago is not None and not (
+            isinstance(days_published_ago, int) and days_published_ago > 0
+        ):
+            self.logger.warning(
+                f"Tavily search: days_published_ago '{days_published_ago}' must be a positive integer."
+            )
+            return "Error: days_published_ago must be a positive integer."
+
+        payload: Dict[str, Any] = {
+            "query": query,
+            "search_depth": search_depth,
+            "include_answer": include_answer,
+            "include_raw_content": include_raw_content,
+            "max_results": max_results,
+            "include_domains": include_domains or [],
+            "exclude_domains": exclude_domains or [],
+            "include_images": include_images,
+        }
+        if days_published_ago is not None:
+            payload["days_published_ago"] = days_published_ago
+
+        try:
+            response_dict = await self._make_post_request_with_retry(
+                self.TAVILY_ENDPOINT, payload
+            )
+            validated_response = TavilyApiResponse.model_validate(response_dict)
+            self.logger.info(f"Tavily search tool returned result for query: {query}")
+            return self._format_search_results(validated_response)
+        except Exception as e:
+            self.logger.error(
+                f"Error in tavily search for query '{query}': {e}", exc_info=True
+            )
+            return f"Error occurred during Tavily search: {e}"
+
+    async def _extract_url_content_via_tavily(
+        self,
+        url_to_extract: str,
+        extract_depth: Optional[str] = None,
+        include_images_in_extract: bool = False,
+    ) -> str:
+        """
+        Fetches and returns the main textual content from a given URL using Tavily's /extract endpoint.
+
+        Args:
+            url_to_extract (str): The URL of the webpage to fetch content from. Must be a valid HTTP/HTTPS URL.
+            extract_depth (str): "basic" for core content, "advanced" for more comprehensive extraction. Defaults to "basic".
+            include_images_in_extract (bool): Whether to include image URLs from the extracted content. Defaults to False.
+
+        Returns:
+            str: The extracted textual content of the webpage, or an error message.
+        """
+        self.logger.info(
+            f"Tavily extract content tool called for URL: {url_to_extract}"
+        )
+        try:
+            validated_url = HttpUrl(url_to_extract)
+            self.logger.info(f"Extracting URL: {validated_url}")
+        except ValueError:
+            err_msg = f"Error: Invalid URL format provided: {url_to_extract}"
+            self.logger.warning(err_msg)
+            return err_msg
+
+        if not extract_depth:
+            extract_depth = self.SEARCH_DEPTH_BASIC
+
+        if extract_depth not in [
+            self.SEARCH_DEPTH_BASIC,
+            self.SEARCH_DEPTH_ADVANCED,
+        ]:
+            extract_depth_err_msg = f"Error: extract_depth must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
+            self.logger.warning(extract_depth_err_msg)
+            self.logger.warning("Setting extract depth to BASIC")
+            extract_depth = self.SEARCH_DEPTH_BASIC
+
+        payload = {
+            "urls": [str(validated_url)],
+            "extract_depth": extract_depth,
+            "include_images": include_images_in_extract,
+        }
+        try:
+            response_dict = await self._make_post_request_with_retry(
+                self.TAVILY_EXTRACT_ENDPOINT, payload
+            )
+
+            validated_response = TavilyExtractApiResponse.model_validate(response_dict)
+            self.logger.info(
+                f"Tavily extract content tool returned result for URL: {url_to_extract}"
+            )
+            return self._format_extract_results(validated_response)
+        except Exception as exp:
+            self.logger.error(
+                f"Error in extracting URL '{url_to_extract}': {exp}",
+                exc_info=True,
+            )
+            return f"Error occurred during Tavily content extraction: {exp}"
+
+    async def _crawl_url_via_tavily(
+        self,
+        url_to_crawl: str,
+        max_depth: int = 1,
+        max_breadth: int = 20,
+        limit: int = 50,
+        instructions: Optional[str] = None,
+        select_paths: Optional[List[str]] = None,
+        select_domains: Optional[List[str]] = None,
+        exclude_paths: Optional[List[str]] = None,
+        exclude_domains: Optional[List[str]] = None,
+        allow_external: bool = False,
+        include_images_in_crawl: bool = False,
+        categories: Optional[List[str]] = None,
+        extract_depth_for_crawl: Optional[str] = None,
+    ) -> str:
+        """
+        Crawls a given base URL up to a specified depth and breadth, extracting content.
+
+        Args:
+            url_to_crawl (str): The base URL to start crawling from (e.g., "docs.tavily.com").
+            max_depth (int): Max depth of crawling from the base URL (0 for base URL only, 1 for links on base URL, etc.). Defaults to 1.
+            max_breadth (int): Max number of links to follow from each page. Defaults to 20.
+            limit (int): Max total number of pages to crawl. Defaults to 50.
+            instructions (Optional[str]): Specific instructions for the crawler.
+            select_paths (Optional[List[str]]): List of URL paths to prioritize (e.g., ["/blog/", "/docs/"]).
+            select_domains (Optional[List[str]]): List of domains to prioritize if allow_external is True.
+            exclude_paths (Optional[List[str]]): List of URL paths to exclude.
+            exclude_domains (Optional[List[str]]): List of domains to exclude.
+            allow_external (bool): Whether to allow crawling external domains linked from the base URL. Defaults to False.
+            include_images_in_crawl (bool): Whether to include image URLs in the crawled content. Defaults to False.
+            categories (Optional[List[str]]): Specific content categories to focus on.
+            extract_depth_for_crawl (str): Extraction depth ("basic" or "advanced") for each crawled page. Defaults to "basic".
+
+        Returns:
+            str: Formatted crawled content or an error message.
+        """
+        self.logger.info(
+            f"Tavily crawl URL tool called for URL: {url_to_crawl}, max_depth: {max_depth}"
+        )
+        if not isinstance(url_to_crawl, str) or not url_to_crawl.strip():
+            self.logger.warning(
+                "Tavily crawl: url_to_crawl must be a non-empty string."
+            )
+            return "Error: url_to_crawl must be a non-empty string."
+
+        if not (isinstance(max_depth, int) and max_depth >= 0):
+            self.logger.warning(
+                f"Tavily crawl: max_depth '{max_depth}' must be a non-negative integer."
+            )
+            return "Error: max_depth must be a non-negative integer."
+        if not (isinstance(max_breadth, int) and max_breadth > 0):
+            self.logger.warning(
+                f"Tavily crawl: max_breadth '{max_breadth}' must be a positive integer."
+            )
+            return "Error: max_breadth must be a positive integer."
+        if not (isinstance(limit, int) and limit > 0):
+            self.logger.warning(
+                f"Tavily crawl: limit '{limit}' must be a positive integer."
+            )
+            return "Error: limit must be a positive integer."
+
+        if not extract_depth_for_crawl:
+            extract_depth_for_crawl = self.SEARCH_DEPTH_BASIC
+
+        if extract_depth_for_crawl not in [
+            self.SEARCH_DEPTH_BASIC,
+            self.SEARCH_DEPTH_ADVANCED,
+        ]:
+            self.logger.warning(
+                f"Tavily crawl: extract_depth_for_crawl '{extract_depth_for_crawl}' must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
+            )
+            extract_depth_for_crawl = self.SEARCH_DEPTH_BASIC
+
+        payload: Dict[str, Any] = {
+            "url": url_to_crawl,
+            "max_depth": max_depth,
+            "max_breadth": max_breadth,
+            "limit": limit,
+            "allow_external": allow_external,
+            "include_images": include_images_in_crawl,
+            "extract_depth": extract_depth_for_crawl,
+        }
+
+        if instructions:
+            payload["instructions"] = instructions
+        if select_paths:
+            payload["select_paths"] = select_paths
+        if select_domains:
+            payload["select_domains"] = select_domains
+        if exclude_paths:
+            payload["exclude_paths"] = exclude_paths
+        if exclude_domains:
+            payload["exclude_domains"] = exclude_domains
+        if categories:
+            payload["categories"] = categories
+
+        try:
+            response_dict = await self._make_post_request_with_retry(
+                self.TAVILY_CRAWL_ENDPOINT, payload
+            )
+            validated_response = TavilyCrawlApiResponse.model_validate(response_dict)
+            self.logger.info(
+                f"Tavily crawl URL tool returned result for URL: {url_to_crawl}"
+            )
+            return self._format_crawl_results(validated_response)
+        except Exception as e:
+            self.logger.error(
+                f"Error in tavily_crawl_url for URL '{url_to_crawl}': {e}",
+                exc_info=True,
+            )
+            return f"Error occurred during Tavily URL crawling: {e}"
+
     async def _register_tools(self):
-        @self.mcp_server.tool()
-        async def tavily(
-            query: str,
-            search_depth: str = self.SEARCH_DEPTH_BASIC,
-            include_answer: bool = False,
-            include_raw_content: bool = False,
-            max_results: int = 5,
-            include_domains: Optional[List[str]] = None,
-            exclude_domains: Optional[List[str]] = None,
-            include_images: bool = False,
-            days_published_ago: Optional[int] = None,
-        ) -> str:
-            """
-            Performs a search using the Tavily AI API.
-            Ideal for comprehensive research, finding factual information, and getting direct answers.
-
-            Args:
-                query (str): The search query.
-                search_depth (str): "basic" for quick results, "advanced" for thorough research. Defaults to "basic".
-                include_answer (bool): If True, attempts to provide a direct answer. Defaults to False.
-                include_raw_content (bool): If True, includes snippets of raw web content. Defaults to False.
-                max_results (int): Max number of results (1-20, API default is 5). Defaults to 5.
-                include_domains (Optional[List[str]]): Domains to focus on (e.g., ["wikipedia.org", "bbc.com"]).
-                exclude_domains (Optional[List[str]]): Domains to exclude.
-                include_images (bool): If True, includes image URLs in results. Defaults to False.
-                days_published_ago (Optional[int]): Filters results published within the last N days (e.g., 7 for last week).
-
-            Returns:
-                str: Formatted search results or an error message.
-            """
-            self.logger.info(
-                f"Tavily search tool called with query: {query}, depth: {search_depth}"
-            )
-            if not isinstance(query, str) or not query.strip():
-                self.logger.warning("Tavily search: Query must be a non-empty string.")
-                return "Error: Query must be a non-empty string."
-            if search_depth not in [
-                self.SEARCH_DEPTH_BASIC,
-                self.SEARCH_DEPTH_ADVANCED,
-            ]:
-                self.logger.warning(
-                    f"Tavily search: Invalid search_depth '{search_depth}'."
-                )
-                return f"Error: search_depth must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
-            if not (1 <= max_results <= 20):
-                self.logger.warning(
-                    f"Tavily search: max_results '{max_results}' must be between 1 and 20."
-                )
-                return "Error: max_results must be between 1 and 20."
-            if days_published_ago is not None and not (
-                isinstance(days_published_ago, int) and days_published_ago > 0
-            ):
-                self.logger.warning(
-                    f"Tavily search: days_published_ago '{days_published_ago}' must be a positive integer."
-                )
-                return "Error: days_published_ago must be a positive integer."
-
-            payload: Dict[str, Any] = {
-                "query": query,
-                "search_depth": search_depth,
-                "include_answer": include_answer,
-                "include_raw_content": include_raw_content,
-                "max_results": max_results,
-                "include_domains": include_domains or [],
-                "exclude_domains": exclude_domains or [],
-                "include_images": include_images,
-            }
-            if days_published_ago is not None:
-                payload["days_published_ago"] = days_published_ago
-
-            try:
-                response_dict = await self._make_post_request_with_retry(
-                    self.TAVILY_ENDPOINT, payload
-                )
-                validated_response = TavilyApiResponse.model_validate(response_dict)
-                self.logger.info(
-                    f"Tavily search tool returned result for query: {query}"
-                )
-                return self._format_search_results(validated_response)
-            except Exception as e:
-                self.logger.error(
-                    f"Error in tavily search for query '{query}': {e}", exc_info=True
-                )
-                return f"Error occurred during Tavily search: {e}"
-
-        @self.mcp_server.tool()
-        async def tavily_extract_content(
-            url_to_extract: str,
-            extract_depth: str = self.SEARCH_DEPTH_BASIC,
-            include_images_in_extract: bool = False,
-        ) -> str:
-            """
-            Fetches and returns the main textual content from a given URL using Tavily's /extract endpoint.
-
-            Args:
-                url_to_extract (str): The URL of the webpage to fetch content from. Must be a valid HTTP/HTTPS URL.
-                extract_depth (str): "basic" for core content, "advanced" for more comprehensive extraction. Defaults to "basic".
-                include_images_in_extract (bool): Whether to include image URLs from the extracted content. Defaults to False.
-
-            Returns:
-                str: The extracted textual content of the webpage, or an error message.
-            """
-            self.logger.info(
-                f"Tavily extract content tool called for URL: {url_to_extract}"
-            )
-            try:
-                validated_url = HttpUrl(url_to_extract)
-                self.logger.info(f"Extracting URL: {validated_url}")
-            except ValueError:
-                err_msg = f"Error: Invalid URL format provided: {url_to_extract}"
-                self.logger.warning(err_msg)
-                return err_msg
-
-            if extract_depth not in [
-                self.SEARCH_DEPTH_BASIC,
-                self.SEARCH_DEPTH_ADVANCED,
-            ]:
-                extract_depth_err_msg = f"Error: extract_depth must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
-                self.logger.warning(extract_depth_err_msg)
-                return extract_depth_err_msg
-
-            payload = {
-                "urls": [str(validated_url)],
-                "extract_depth": extract_depth,
-                "include_images": include_images_in_extract,
-            }
-            try:
-                response_dict = await self._make_post_request_with_retry(
-                    self.TAVILY_EXTRACT_ENDPOINT, payload
-                )
-
-                validated_response = TavilyExtractApiResponse.model_validate(
-                    response_dict
-                )
-                self.logger.info(
-                    f"Tavily extract content tool returned result for URL: {url_to_extract}"
-                )
-                return self._format_extract_results(validated_response)
-            except Exception as exp:
-                self.logger.error(
-                    f"Error in tavily_extract_content for URL '{url_to_extract}': {exp}",
-                    exc_info=True,
-                )
-                return f"Error occurred during Tavily content extraction: {exp}"
-
-        @self.mcp_server.tool()
-        async def tavily_crawl_url(
-            url_to_crawl: str,
-            max_depth: int = 1,
-            max_breadth: int = 20,
-            limit: int = 50,
-            instructions: Optional[str] = None,
-            select_paths: Optional[List[str]] = None,
-            select_domains: Optional[List[str]] = None,
-            exclude_paths: Optional[List[str]] = None,
-            exclude_domains: Optional[List[str]] = None,
-            allow_external: bool = False,
-            include_images_in_crawl: bool = False,
-            categories: Optional[List[str]] = None,
-            extract_depth_for_crawl: str = self.SEARCH_DEPTH_BASIC,
-        ) -> str:
-            """
-            Crawls a given base URL up to a specified depth and breadth, extracting content.
-
-            Args:
-                url_to_crawl (str): The base URL to start crawling from (e.g., "docs.tavily.com").
-                max_depth (int): Max depth of crawling from the base URL (0 for base URL only, 1 for links on base URL, etc.). Defaults to 1.
-                max_breadth (int): Max number of links to follow from each page. Defaults to 20.
-                limit (int): Max total number of pages to crawl. Defaults to 50.
-                instructions (Optional[str]): Specific instructions for the crawler.
-                select_paths (Optional[List[str]]): List of URL paths to prioritize (e.g., ["/blog/", "/docs/"]).
-                select_domains (Optional[List[str]]): List of domains to prioritize if allow_external is True.
-                exclude_paths (Optional[List[str]]): List of URL paths to exclude.
-                exclude_domains (Optional[List[str]]): List of domains to exclude.
-                allow_external (bool): Whether to allow crawling external domains linked from the base URL. Defaults to False.
-                include_images_in_crawl (bool): Whether to include image URLs in the crawled content. Defaults to False.
-                categories (Optional[List[str]]): Specific content categories to focus on.
-                extract_depth_for_crawl (str): Extraction depth ("basic" or "advanced") for each crawled page. Defaults to "basic".
-
-            Returns:
-                str: Formatted crawled content or an error message.
-            """
-            self.logger.info(
-                f"Tavily crawl URL tool called for URL: {url_to_crawl}, max_depth: {max_depth}"
-            )
-            if not isinstance(url_to_crawl, str) or not url_to_crawl.strip():
-                self.logger.warning(
-                    "Tavily crawl: url_to_crawl must be a non-empty string."
-                )
-                return "Error: url_to_crawl must be a non-empty string."
-
-            if not (isinstance(max_depth, int) and max_depth >= 0):
-                self.logger.warning(
-                    f"Tavily crawl: max_depth '{max_depth}' must be a non-negative integer."
-                )
-                return "Error: max_depth must be a non-negative integer."
-            if not (isinstance(max_breadth, int) and max_breadth > 0):
-                self.logger.warning(
-                    f"Tavily crawl: max_breadth '{max_breadth}' must be a positive integer."
-                )
-                return "Error: max_breadth must be a positive integer."
-            if not (isinstance(limit, int) and limit > 0):
-                self.logger.warning(
-                    f"Tavily crawl: limit '{limit}' must be a positive integer."
-                )
-                return "Error: limit must be a positive integer."
-            if extract_depth_for_crawl not in [
-                self.SEARCH_DEPTH_BASIC,
-                self.SEARCH_DEPTH_ADVANCED,
-            ]:
-                self.logger.warning(
-                    f"Tavily crawl: extract_depth_for_crawl '{extract_depth_for_crawl}' must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
-                )
-                return f"Error: extract_depth_for_crawl must be '{self.SEARCH_DEPTH_BASIC}' or '{self.SEARCH_DEPTH_ADVANCED}'."
-
-            payload: Dict[str, Any] = {
-                "url": url_to_crawl,
-                "max_depth": max_depth,
-                "max_breadth": max_breadth,
-                "limit": limit,
-                "allow_external": allow_external,
-                "include_images": include_images_in_crawl,
-                "extract_depth": extract_depth_for_crawl,
-            }
-
-            if instructions:
-                payload["instructions"] = instructions
-            if select_paths:
-                payload["select_paths"] = select_paths
-            if select_domains:
-                payload["select_domains"] = select_domains
-            if exclude_paths:
-                payload["exclude_paths"] = exclude_paths
-            if exclude_domains:
-                payload["exclude_domains"] = exclude_domains
-            if categories:
-                payload["categories"] = categories
-
-            try:
-                response_dict = await self._make_post_request_with_retry(
-                    self.TAVILY_CRAWL_ENDPOINT, payload
-                )
-                validated_response = TavilyCrawlApiResponse.model_validate(
-                    response_dict
-                )
-                self.logger.info(
-                    f"Tavily crawl URL tool returned result for URL: {url_to_crawl}"
-                )
-                return self._format_crawl_results(validated_response)
-            except Exception as e:
-                self.logger.error(
-                    f"Error in tavily_crawl_url for URL '{url_to_crawl}': {e}",
-                    exc_info=True,
-                )
-                return f"Error occurred during Tavily URL crawling: {e}"
+        """Register the tavily tools."""
+        self._register_mcp_server_tool(
+            self._search_web_via_tavily,
+            read_only=True,
+            destructive=False,
+            idempotent=True,
+            open_world=True,
+        )
+        self._register_mcp_server_tool(
+            self._extract_url_content_via_tavily,
+            read_only=True,
+            destructive=False,
+            idempotent=True,
+            open_world=True,
+        )
+        self._register_mcp_server_tool(
+            self._crawl_url_via_tavily,
+            read_only=True,
+            destructive=False,
+            idempotent=True,
+            open_world=True,
+        )

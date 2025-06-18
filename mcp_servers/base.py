@@ -2,9 +2,10 @@ import time
 import asyncio
 import logging
 import httpx
+from mcp.types import ToolAnnotations
 import uvicorn
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Callable, Optional, Dict, Any
 from asyncio import Task
 
 from uvicorn import Server
@@ -197,6 +198,27 @@ class AbstractMCPServer(ABC):
             )
         return MCPServerStreamableHTTP(
             url=f"http://{self.settings.HOST}:{self.settings.PORT}/mcp"
+        )
+
+    def _register_mcp_server_tool(
+        self,
+        fn: Callable,
+        read_only: bool = False,
+        destructive: bool = True,
+        idempotent: bool = False,
+        open_world: bool = True,
+    ) -> None:
+        self.mcp_server.add_tool(
+            fn=fn,
+            name=fn.__name__,
+            description=fn.__doc__,
+            annotations=ToolAnnotations(
+                title=fn.__name__.replace("_", " ").strip(),
+                readOnlyHint=read_only,
+                destructiveHint=destructive,
+                idempotentHint=idempotent,
+                openWorldHint=open_world,
+            ),
         )
 
 

@@ -23,10 +23,10 @@ assert os.environ.get("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY must be defined
 
 async def main():
     mcp_servers: List[AbstractMCPServer] = [
-        MCPServerFilesystem(host="127.0.0.1", port=8000, allowed_dir=Path.cwd()),
-        MCPServerBrave(host="127.0.0.1", port=8001),
-        MCPServerSearxng(host="127.0.0.1", port=8002),
-        MCPServerTavily(host="127.0.0.1", port=8003),
+        MCPServerFilesystem(host="127.0.0.1", port=8770, allowed_dir=Path.cwd()),
+        MCPServerBrave(host="127.0.0.1", port=8771),
+        MCPServerSearxng(host="127.0.0.1", port=8772),
+        MCPServerTavily(host="127.0.0.1", port=8773),
     ]
     mcp_servers_streamable_https = [
         mcpserver.get_mcp_server_streamable_http() for mcpserver in mcp_servers

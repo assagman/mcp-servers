@@ -315,6 +315,71 @@ class MCPServerFilesystem(AbstractMCPServer):
             )
             raise
 
+    def _find_directories_in_current_working_directory(
+        self,
+        dirname: str,
+        exact_match: bool = True,
+    ) -> List[str]:
+        """
+        Search and return all directories matching with given dirname recursively in cwd. This tool
+        uses `fd` and it's expected as executable in the system.
+
+        Args:
+            dirname (str): Dirname to search.
+            exact_match (bool): Specifies if the name should be searched exactly or not.
+                Like patterns: name vs ^name$
+
+        Returns:
+            A list of paths, each corresponds to relative paths to the current
+            working directory.
+        """
+        self.logger.info(f"Searching for dirname '{dirname}' in project.")
+
+        default_exclude_dirs = [
+            ".venv",
+            "dist",
+            "__pycache__",
+            "node_modules",
+        ]
+
+        if exact_match:
+            dirname_pattern = f"^{dirname}$"
+        else:
+            dirname_pattern = dirname
+
+        cmd = [
+            "fd",  # fd executable
+            "-Hi",  # --hidden, --ignore-case
+            "-t",  # type
+            "d",  # directory
+            *[f"-E {d}" for d in default_exclude_dirs],  # exclude dirs
+            dirname_pattern,
+            ".",
+        ]
+        self.logger.debug(" ".join(cmd))
+        try:
+            completed = subprocess.run(cmd, check=True, text=True, capture_output=True)
+            found_matches = [str(Path(line)) for line in completed.stdout.splitlines()]
+            self.logger.info(f"Found {dirname} matches: {'\n'.join(found_matches)}.")
+            return found_matches
+        except FileNotFoundError as exc:
+            self.logger.error("fd is not installed or not in PATH.")
+            raise RuntimeError("fd is not installed or not in PATH") from exc
+        except subprocess.CalledProcessError as exc:
+            if exc.returncode == 1:
+                self.logger.info(f"No files found named '{dirname}'.")
+                return []
+            self.logger.error(
+                f"Error running ripgrep: {exc}\n{exc.stderr}", exc_info=True
+            )
+            raise
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error occured while finding file '{dirname}': {e}",
+                exc_info=True,
+            )
+            raise
+
     def _grep_text_in_current_working_directory(
         self,
         text: str,
@@ -804,6 +869,13 @@ class MCPServerFilesystem(AbstractMCPServer):
         )
         self._register_mcp_server_tool(
             self._find_files_in_current_working_directory,
+            read_only=True,
+            destructive=False,
+            idempotent=True,
+            open_world=False,
+        )
+        self._register_mcp_server_tool(
+            self._find_directories_in_current_working_directory,
             read_only=True,
             destructive=False,
             idempotent=True,

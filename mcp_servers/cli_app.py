@@ -1,16 +1,19 @@
 import os
 import sys
 import argparse
+import logging
+from typing import List, Dict, Any
 from pathlib import Path
 import shutil
 import secrets
 import subprocess
 import asyncio
+import signal
+
 import httpx
 import daemon
 import daemon.pidfile
-import logging
-import signal
+import psutil
 
 import mcp_servers
 from mcp_servers.filesystem import MCPServerFilesystem
@@ -372,6 +375,107 @@ def check_existing_server(pid_file: str):
             os.remove(pid_file)
 
 
+def show_status():
+    """
+    Display MCP servers' status, both attached and detahced.
+    """
+
+    def find_processes_by_cmdline(search_string):
+        processes = []
+        for process in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                process_info = process.info
+                cmdline = (
+                    " ".join(process_info["cmdline"]).lower()
+                    if process_info["cmdline"]
+                    else ""
+                )
+                if search_string.lower() in cmdline:
+                    processes.append(process_info)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+        return processes
+
+    search_term = "mcpserver"
+    matching_processes = find_processes_by_cmdline(search_term)
+
+    mcpserver_ps_info: List[Dict[str, Any]] = []
+
+    if matching_processes:
+        for process in matching_processes:
+            ps_dict = {}
+            cmd_parts: list = process["cmdline"][2:]
+            mcpserver_cmd = cmd_parts[0]
+            if mcpserver_cmd == "start":
+                try:
+                    server_opt_idx = cmd_parts.index("--server")
+                    mcpserver_name = cmd_parts[server_opt_idx + 1]
+                    ps_dict["server"] = mcpserver_name
+                except ValueError as _:
+                    print("Unable to find mcpserver name")
+                    raise
+
+                try:
+                    port_opt_idx = cmd_parts.index("--port")
+                    mcpserver_port = cmd_parts[port_opt_idx + 1]
+                    ps_dict["port"] = mcpserver_port
+                except ValueError as _:
+                    ps_dict["port"] = "N/A"
+
+                try:
+                    print(cmd_parts)
+                    _ = cmd_parts.index("--detach")
+                    ps_dict["detached"] = True
+                except ValueError as _:
+                    ps_dict["detached"] = False
+
+                mcpserver_ps_info.append(ps_dict)
+
+    if not mcpserver_ps_info:
+        print("No active mcpserver found.")
+        return
+
+    # construct table
+    table_column_width = 20
+    table_columns = ["server", "ports", "detached"]
+    table_columns_row = ""
+    for col in table_columns:
+        fixed_col_name_str = f"| {col}"
+        table_columns_row += fixed_col_name_str + " " * (
+            table_column_width - len(fixed_col_name_str)
+        )
+    table_columns_row += "|"
+    table_width = len(table_columns_row)
+    print("╭" + "-" * (table_width - 2) + "╮")
+    print(table_columns_row)
+    print("|" + "-" * (table_width - 2) + "|")
+
+    for ps_dict in mcpserver_ps_info:
+        server = ps_dict["server"]
+        port = ps_dict["port"]
+        detached = ps_dict["detached"]
+
+        info_row = ""
+        server_part_wo_spaces = f"| {server}"
+        info_row += server_part_wo_spaces + " " * (
+            table_column_width - len(server_part_wo_spaces)
+        )
+
+        port_part_wo_spaces = f"| {port}"
+        info_row += port_part_wo_spaces + " " * (
+            table_column_width - len(port_part_wo_spaces)
+        )
+
+        detached_part_wo_spaces = f"| {detached}"
+        info_row += detached_part_wo_spaces + " " * (
+            table_column_width - len(detached_part_wo_spaces)
+        )
+        info_row += "|"
+        print(info_row)
+
+    print("╰" + "-" * (table_width - 2) + "╯")
+
+
 def main():
     """Parse arguments and decide whether to run in foreground or daemon mode."""
     parser = argparse.ArgumentParser(
@@ -468,6 +572,8 @@ def main():
         help="Type of server to start",
     )
 
+    _ = subparsers.add_parser("status", help="Show MCP server status")
+
     # Parse the arguments
     args = parser.parse_args()
 
@@ -503,3 +609,5 @@ def main():
         run_external_container(args.container)
     elif args.command == "stop_external_container":
         stop_external_container(args.container)
+    elif args.command == "status":
+        show_status()

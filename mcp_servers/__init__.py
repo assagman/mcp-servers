@@ -23,7 +23,7 @@ def load_env_vars(dotenv_path: Optional[str] = str(DEFAULT_ENV_FILE)) -> None:
     """Loads environment variables from a .env file."""
     loaded = load_dotenv(dotenv_path=dotenv_path, override=True)
     if loaded:
-        _logger.info(
+        _logger.debug(
             f".env file loaded successfully from {dotenv_path or 'default location'}."
         )
     else:

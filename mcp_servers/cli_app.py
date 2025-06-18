@@ -1,14 +1,15 @@
+"""Command line interface for mcpserver."""
+
 import os
 import sys
 import argparse
 import logging
-from typing import List, Dict, Any
-from pathlib import Path
+import asyncio
+import signal
 import shutil
 import secrets
 import subprocess
-import asyncio
-import signal
+from typing import List, Dict, Any
 
 import httpx
 import daemon
@@ -27,11 +28,23 @@ from mcp_servers import (
     DEFAULT_SEARXNG_SETTINGS_FILE,
     load_env_vars,
 )
+from mcp_servers.logger import MCPServersLogger
+
+logger = MCPServersLogger.get_logger("mcpserver")
+
+
+# Constants for file paths.  Consider making these configurable via environment variables.
+PID_DIR = "/tmp"  # Or a more appropriate location like /var/run
 
 load_env_vars()
 
+# TODO: implement configuration loading and saving using configparser or PyYAML
+# import configparser
+# config = configparser.ConfigParser()
+
 
 def initialize_config(subcommand: str, force: bool):
+    """Initialize the MCP server configuration."""
     if not subcommand:
         subcommand = "all"
 
@@ -59,7 +72,8 @@ def initialize_config(subcommand: str, force: bool):
             with httpx.Client() as client:
                 response = client.get(url)
             response.raise_for_status()
-            DEFAULT_ENV_FILE.write_text(response.text)
+            with open(DEFAULT_ENV_FILE, "w") as f:
+                f.write(response.text)
             print(f"Example environment variable file written to {DEFAULT_ENV_FILE}")
 
         except httpx.HTTPError as e:
@@ -79,9 +93,10 @@ def initialize_config(subcommand: str, force: bool):
     os.makedirs(DEFAULT_SEARXNG_CONFIG_DIR, exist_ok=True)
 
     if not DEFAULT_SEARXNG_SETTINGS_FILE.exists() and subcommand in ["all", "searxng"]:
-        with open(DEFAULT_SEARXNG_SETTINGS_FILE, "w") as f:
-            f.write(
-                f"""
+        try:
+            with open(DEFAULT_SEARXNG_SETTINGS_FILE, "w") as f:
+                f.write(
+                    f"""
 use_default_settings: true
 
 server:
@@ -96,18 +111,21 @@ search:
 engines:
   - name: startpage
     disabled: true
-            """
-            )
+                    """
+                )
+            print(f"Created SearXNG config file: {DEFAULT_SEARXNG_SETTINGS_FILE}")
+        except OSError as e:
+            print(f"Error writing to file: {e}")
     else:
         print("Skipped init for searxng")
 
 
-def check_container_command_exists(command):
+def check_container_command_exists(command: str) -> bool:
     """Check if a command exists and is executable."""
     return shutil.which(command) is not None
 
 
-def get_container_tool():
+def get_container_tool() -> str:
     """Determine which container tool (podman or docker) is available."""
     if check_container_command_exists("podman"):
         return "podman"
@@ -204,22 +222,15 @@ def stop_external_container(container: str):
         raise NotImplementedError(container)
 
 
-async def start_server(args):
-    """Main entry point for the MCPServer CLI application."""
+async def start_server(args: argparse.Namespace):
+    """Main entry point for the mcpserver CLI application."""
     # Handle the 'start' command
     if args.command == "start":
-        if args.server == "filesystem":
-            # Set environment variables if provided
-            if args.allowed_dir:
-                os.environ["MCP_SERVER_FILESYSTEM_ALLOWED_DIR"] = str(
-                    Path(args.allowed_dir).expanduser().resolve()
-                )
-            if args.host:
-                os.environ["MCP_SERVER_FILESYSTEM_HOST"] = args.host
-            if args.port:
-                os.environ["MCP_SERVER_FILESYSTEM_PORT"] = str(args.port)
-
-            server = MCPServerFilesystem()
+        server_type = args.server  # more readable
+        if server_type == "filesystem":
+            server = MCPServerFilesystem(
+                host=args.host, port=args.port, allowed_dir=args.allowed_dir
+            )
             try:
                 await server.start()
                 await server.await_server_task()
@@ -227,15 +238,10 @@ async def start_server(args):
                 print("\nServer shutting down...")
                 await server.stop()
                 sys.exit(0)
-        elif args.server == "brave":
+        elif server_type == "brave":
             assert os.getenv("BRAVE_API_KEY"), "BRAVE_API_KEY must be set"
 
-            if args.host:
-                os.environ["MCP_SERVER_BRAVE_HOST"] = args.host
-            if args.port:
-                os.environ["MCP_SERVER_BRAVE_PORT"] = str(args.port)
-
-            server = MCPServerBrave()
+            server = MCPServerBrave(host=args.host, port=args.port)
             try:
                 await server.start()
                 await server.await_server_task()
@@ -243,15 +249,10 @@ async def start_server(args):
                 print("\nServer shutting down...")
                 await server.stop()
                 sys.exit(0)
-        elif args.server == "searxng":
+        elif server_type == "searxng":
             assert os.getenv("SEARXNG_BASE_URL"), "SEARXNG_BASE_URL must be set"
 
-            if args.host:
-                os.environ["MCP_SERVER_SEARXNG_HOST"] = args.host
-            if args.port:
-                os.environ["MCP_SERVER_SEARXNG_PORT"] = str(args.port)
-
-            server = MCPServerSearxng()
+            server = MCPServerSearxng(host=args.host, port=args.port)
             try:
                 await server.start()
                 await server.await_server_task()
@@ -259,13 +260,10 @@ async def start_server(args):
                 print("\nServer shutting down...")
                 await server.stop()
                 sys.exit(0)
-        elif args.server == "tavily":
-            if args.host:
-                os.environ["MCP_SERVER_TAVILY_HOST"] = args.host
-            if args.port:
-                os.environ["MCP_SERVER_TAVILY_PORT"] = str(args.port)
+        elif server_type == "tavily":
+            assert os.getenv("TAVILY_API_KEY"), "TAVILY_API_KEY must be set"
 
-            server = MCPServerTavily()
+            server = MCPServerTavily(host=args.host, port=args.port)
             try:
                 await server.start()
                 await server.await_server_task()
@@ -277,107 +275,124 @@ async def start_server(args):
             raise ValueError(f"Unknown server type: {args.server}")
 
 
-def stop_server(server: str, port: str):
+def stop_server(server: str, port: int) -> None:
     """Stop the running daemonized server."""
 
-    base_file_name = f"mcp_server_{server}"
-    if port:
-        base_file_name = base_file_name + "_" + str(port)
+    base_file_name = f"mcp_server_{server}_{port}"
 
-    pid_filename = "/tmp/" + base_file_name + ".pid"
-    out_filename = "/tmp/" + base_file_name + ".out"
-    err_filename = "/tmp/" + base_file_name + ".err"
-    print(pid_filename)
-    print(out_filename)
-    print(err_filename)
-    if not os.path.exists(pid_filename):
-        print("Error: No running server found (PID file does not exist).")
-        os.remove(out_filename)
-        os.remove(err_filename)
-        sys.exit(1)
+    pid_filename = os.path.join(PID_DIR, base_file_name + ".pid")
+    out_filename = os.path.join(PID_DIR, base_file_name + ".out")
+    err_filename = os.path.join(PID_DIR, base_file_name + ".err")
+
+    logger.info(f"Attempting to stop server with PID file: {pid_filename}")
 
     try:
         with open(pid_filename, "r") as f:
             pid = int(f.read().strip())
     except (IOError, ValueError) as e:
-        print(f"Error reading PID file: {e}")
-        os.remove(out_filename)
-        os.remove(err_filename)
+        logger.error(f"Error reading PID file: {e}")
+        # only remove the out and error if we read the pid file
+        logger.info("Cleaning up related server process files if exist")
+        if os.path.exists(out_filename):
+            os.remove(out_filename)
+        if os.path.exists(err_filename):
+            os.remove(err_filename)
         sys.exit(1)
 
     # Check if process is running
     try:
-        os.kill(pid, 0)  # Check if process exists
-    except OSError:
-        print("Error: No process found with PID {pid}. Removing stale PID file.")
-        os.remove(pid_filename)
-        os.remove(out_filename)
-        os.remove(err_filename)
+        proc = psutil.Process(pid)
+        proc.terminate()
+        logger.info(f"Sent shutdown signal to server (PID: {pid}).")
+    except psutil.NoSuchProcess:
+        logger.warning(f"Error: No process found with PID {pid}.")
+        logger.info("Removing stale server process files if exist.")
+        if os.path.exists(pid_filename):
+            os.remove(pid_filename)
+        if os.path.exists(out_filename):
+            os.remove(out_filename)
+        if os.path.exists(err_filename):
+            os.remove(err_filename)
         sys.exit(1)
 
-    # Send SIGTERM to stop the server
-    try:
-        os.kill(pid, signal.SIGTERM)
-        print(f"Sent shutdown signal to server (PID: {pid}).")
-        os.remove(pid_filename)
-        os.remove(out_filename)
-        os.remove(err_filename)
-    except OSError as e:
-        print(f"Error sending shutdown signal: {e}")
+    except Exception as e:
+        logger.error(f"Error sending shutdown signal: {e}")
         sys.exit(1)
 
 
-def setup_logging(server: str):
+async def handle_shutdown(signum, frame, logger):
+    """Handle graceful shutdown signals."""
+    logger.info("Received shutdown signal, stopping server")
+    logger.shutdown()
+    asyncio.get_event_loop().stop()
+    sys.exit(0)
+
+
+def setup_damon_logging(server: str, port: int) -> logging.Logger:
     """Set up logging for the daemon process."""
+    log_file = os.path.join(PID_DIR, f"mcp_server_{server}_{port}.log")
     logging.basicConfig(
-        filename=f"/tmp/mcp_server_{server}.log",
+        filename=log_file,
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
-    return logging.getLogger()
+    logger = logging.getLogger(f"mcp_server_{server}_{port}")
+    return logger
 
 
-def daemon_main(args):
+def daemon_main(args: argparse.Namespace):
     """Main function for daemonized process."""
-    logger = setup_logging(args.server)
-    logger.info("Starting MCP Server in daemon mode")
-    print("Starting MCP Server in daemon mode")
-
     # Handle graceful shutdown
-    def handle_shutdown(signum, frame):
-        logger.info("Received shutdown signal, stopping server")
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, handle_shutdown)
-    signal.signal(signal.SIGINT, handle_shutdown)
+    daemon_logger = setup_damon_logging(args.server, args.port)
+    daemon_logger.info(f"Starting {args.server}:{args.port} in daemon mode")
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(
+            sig,
+            lambda sig=sig: asyncio.create_task(
+                handle_shutdown(sig, None, daemon_logger)
+            ),
+        )
 
     try:
         asyncio.run(start_server(args))
     except Exception as e:
-        logger.error(f"Daemon failed: {str(e)}")
+        daemon_logger.error(f"Daemon failed: {str(e)}", exc_info=True)
         sys.exit(1)
 
 
-def check_existing_server(pid_file: str):
+def check_existing_server(pid_file: str) -> None:
     """Check if a server of the given type is already running."""
     if os.path.exists(pid_file):
         try:
             with open(pid_file, "r") as f:
                 pid = int(f.read().strip())
             # Check if process is running
-            os.kill(pid, 0)  # Raises OSError if process doesn't exist
-            print(
-                f"Error: A server is already running with PID {pid}. Stop it first using 'stop --server {{server}}'."
-            )
-            sys.exit(1)
+            proc = psutil.Process(pid)
+            if proc.status() != psutil.STATUS_ZOMBIE:
+                logger.error(
+                    f"Error: A server is already running with PID {pid}. Stop it first using 'stop --server {{server}}'."
+                )
+                sys.exit(1)
+            else:
+                logger.warning(
+                    f"Warning: Zombie process found with PID {pid}. Removing stale PID file."
+                )
+                os.remove(pid_file)
+
         except (IOError, ValueError) as e:
-            print(f"Error reading PID file: {e}. Removing stale PID file.")
+            logger.error(f"Error reading PID file: {e}. Removing stale PID file.")
+            os.remove(pid_file)
+        except psutil.NoSuchProcess:
+            logger.warning(
+                f"No process running related to {pid_file}. Removing stale PID file."
+            )
             os.remove(pid_file)
 
 
 def show_status():
     """
-    Display MCP servers' status, both attached and detahced.
+    Display MCP servers' status, both attached and detached.
     """
 
     def find_processes_by_cmdline(search_string):
@@ -423,7 +438,6 @@ def show_status():
                     ps_dict["port"] = "N/A"
 
                 try:
-                    print(cmd_parts)
                     _ = cmd_parts.index("--detach")
                     ps_dict["detached"] = True
                 except ValueError as _:
@@ -479,7 +493,7 @@ def show_status():
 def main():
     """Parse arguments and decide whether to run in foreground or daemon mode."""
     parser = argparse.ArgumentParser(
-        description="Command line interface for MCP Server",
+        description="Command line interface for mcpserver",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -505,9 +519,17 @@ def main():
         help="Directory to use as the root for file operations",
     )
     start_parser.add_argument(
-        "--host", type=str, help="Host address to bind the server to"
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host address to bind the server to. Defaults to 127.0.0.1",
     )
-    start_parser.add_argument("--port", type=int, help="Port to run the server on")
+    start_parser.add_argument(
+        "--port",
+        type=int,
+        required=True,
+        help="Port to run the server on",
+    )
     start_parser.add_argument(
         "--detach", action="store_true", help="Run the server in detached (daemon) mode"
     )
@@ -524,7 +546,9 @@ def main():
         required=True,
         help="Type of server to start",
     )
-    stop_parser.add_argument("--port", type=int, help="Port to stop the server on")
+    stop_parser.add_argument(
+        "--port", type=int, required=True, help="Port to stop the server on"
+    )
 
     init_parser = subparsers.add_parser("init", help="Stop a running MCP server")
     init_parser.add_argument(
@@ -577,20 +601,28 @@ def main():
     # Parse the arguments
     args = parser.parse_args()
 
+    # Configure logging for the main process (non-daemon)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+
     if args.command == "start":
         if args.detach:
             # Run in daemon mode
             base_file_name = f"mcp_server_{args.server}"
-            if args.port:
-                base_file_name = base_file_name + "_" + str(args.port)
+            base_file_name = base_file_name + "_" + str(args.port)
 
-            pid_filename = "/tmp/" + base_file_name + ".pid"
-            out_filename = "/tmp/" + base_file_name + ".out"
-            err_filename = "/tmp/" + base_file_name + ".err"
+            pid_filename = os.path.join(PID_DIR, base_file_name + ".pid")
+            out_filename = os.path.join(PID_DIR, base_file_name + ".out")
+            err_filename = os.path.join(PID_DIR, base_file_name + ".err")
 
             check_existing_server(pid_filename)
 
             pidfile = daemon.pidfile.TimeoutPIDLockFile(pid_filename)
+            logger.info(
+                f"Starting {args.server} at {args.host}:{args.port} in detach mode."
+            )
             with daemon.DaemonContext(
                 pidfile=pidfile,
                 stdout=open(out_filename, "w"),
@@ -611,3 +643,7 @@ def main():
         stop_external_container(args.container)
     elif args.command == "status":
         show_status()
+
+
+if __name__ == "__main__":
+    main()

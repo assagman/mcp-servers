@@ -28,8 +28,6 @@ class MCPServerFilesystemSettings(BaseMCPServerSettings):
         description="Hostname or IP address to bind the server to.",
     )
     PORT: int = Field(
-        default=8765,
-        validation_alias=AliasChoices("MCP_SERVER_FILESYSTEM_PORT"),
         description="Port number for the server to listen on.",
     )
     ALLOWED_DIRECTORY: Path = Field(
@@ -108,8 +106,8 @@ class MCPServerFilesystem(AbstractMCPServer):
 
     def __init__(
         self,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        host: str,
+        port: int,
         allowed_dir: Optional[Path] = None,
     ):
         super().__init__(host=host, port=port, allowed_dir=allowed_dir)
@@ -119,17 +117,17 @@ class MCPServerFilesystem(AbstractMCPServer):
         return cast(MCPServerFilesystemSettings, self._settings)
 
     def _load_and_validate_settings(
-        self, host: Optional[str] = None, port: Optional[int] = None, **kwargs
+        self, host: str, port: int, **kwargs
     ) -> MCPServerFilesystemSettings:
         """Loads and validates the filesystem server settings."""
-        settings = MCPServerFilesystemSettings()
-        allowed_dir: Optional[str] = kwargs.pop("allowed_dir")
-        if host:
-            settings.HOST = host
-        if port:
-            settings.PORT = port
-        if allowed_dir:
-            settings.ALLOWED_DIRECTORY = Path(allowed_dir).expanduser().resolve()
+        allowed_dir: str = kwargs.pop("allowed_dir") or tempfile.mkdtemp(
+            prefix="mcp_fs_"
+        )
+        settings = MCPServerFilesystemSettings(
+            HOST=host,
+            PORT=port,
+            ALLOWED_DIRECTORY=Path(allowed_dir).expanduser().resolve(),
+        )
         return settings
 
     def _resolve_path_and_ensure_within_allowed(self, relative_path_str: str) -> Path:
@@ -150,8 +148,6 @@ class MCPServerFilesystem(AbstractMCPServer):
         """
         allowed_dir = self.settings.ALLOWED_DIRECTORY
 
-        if not isinstance(relative_path_str, str):
-            raise ValueError("Path must be a string.")
         if not relative_path_str.strip():
             relative_path_str = "."
 
@@ -781,6 +777,6 @@ class MCPServerFilesystem(AbstractMCPServer):
                 )
                 return f"{ERROR_PREFIX}Could not get metadata for '{path}': {e}"
 
-        self.logger.info(
+        self.logger.debug(
             f"Successfully registered tools for {self.settings.SERVER_NAME}."
         )

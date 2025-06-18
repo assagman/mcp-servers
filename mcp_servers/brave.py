@@ -183,7 +183,7 @@ class MCPServerBrave(MCPServerHttpBase):
                 result = await self._perform_web_search(
                     query, count, offset, search_lang, freshness
                 )
-                self.logger.debug(
+                self.logger.info(
                     f"Brave web search tool returned result for query: {query}"
                 )
                 return result

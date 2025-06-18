@@ -222,7 +222,7 @@ class MCPServerSearxng(MCPServerHttpBase):
 
             try:
                 result = await self._perform_search(query, pageno, categories, language)
-                self.logger.debug(f"SearXNG tool returned result for query: {query}")
+                self.logger.info(f"SearXNG tool returned result for query: {query}")
                 return result
             except MCPUpstreamServiceError as e:
                 self.logger.error(

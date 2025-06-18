@@ -18,7 +18,6 @@ from mcp_servers.exceptions import (
     MCPUpstreamServiceError,
 )
 from mcp_servers.logger import MCPServersLogger
-from mcp_servers import DEFAULT_ENV_FILE
 
 
 class MCPServer(FastMCP):
@@ -54,8 +53,7 @@ class BaseMCPServerSettings(BaseSettings):
     RATE_LIMIT_PER_SECOND: Optional[int] = 50
 
     model_config = SettingsConfigDict(
-        env_file=DEFAULT_ENV_FILE,
-        extra="ignore",
+        extra="allow",
         case_sensitive=False,
     )
 
@@ -70,7 +68,10 @@ class AbstractMCPServer(ABC):
     SETTINGS_TYPE = BaseMCPServerSettings
 
     def __init__(
-        self, host: Optional[str] = None, port: Optional[int] = None, **kwargs
+        self,
+        host: str,
+        port: int,
+        **kwargs,
     ):
         """
         Initializes the server. Derived classes are expected to load their
@@ -127,8 +128,8 @@ class AbstractMCPServer(ABC):
     @abstractmethod
     def _load_and_validate_settings(
         self,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        host: str,
+        port: int,
         **kwargs,
     ) -> BaseMCPServerSettings:
         """
@@ -189,7 +190,7 @@ class AbstractMCPServer(ABC):
             self.logger.warning("There is no active server task to await")
 
     def get_mcp_server_streamable_http(self) -> MCPServerStreamableHTTP:
-        """Returns an MCPServerHTTP client configuration for this server."""
+        """Returns an MCPServerStreamableHTTP."""
         if not self.settings:
             raise MCPToolConfigurationError(
                 "Settings not loaded, cannot generate MCPServerHTTP URL."
@@ -247,11 +248,11 @@ class MCPServerHttpBase(AbstractMCPServer):
                 follow_redirects=True,  # Common default
                 **client_config,
             )
-            self.logger.info(
+            self.logger.debug(
                 f"HTTP client initialized for {self.settings.SERVER_NAME} with config: {client_config.get('base_url', 'N/A')}."
             )
         else:
-            self.logger.info(
+            self.logger.warning(
                 f"No HTTP client configuration provided for {self.settings.SERVER_NAME}."
             )
 
@@ -260,7 +261,7 @@ class MCPServerHttpBase(AbstractMCPServer):
         if self.http_client:
             await self.http_client.aclose()
             self.http_client = None
-            self.logger.info(f"HTTP client closed for {self.settings.SERVER_NAME}.")
+            self.logger.debug(f"HTTP client closed for {self.settings.SERVER_NAME}.")
 
     def _check_rate_limit(self) -> None:
         """
@@ -318,7 +319,7 @@ class MCPServerHttpBase(AbstractMCPServer):
 
                     await asyncio.sleep(actual_delay)
 
-                self.logger.debug(
+                self.logger.info(
                     f"Querying (Attempt {attempt + 1}): {endpoint} with params {params}"
                 )
                 response = await self.http_client.get(endpoint, params=params)
@@ -375,7 +376,7 @@ class MCPServerHttpBase(AbstractMCPServer):
                 if (
                     e.response.status_code == 429 and attempt < max_retries
                 ):  # Too Many Requests
-                    self.logger.info(f"Returned 429 for '{query}'. Will retry.")
+                    self.logger.warning(f"Returned 429 for '{query}'. Will retry.")
                     continue
                 else:
                     raise MCPUpstreamServiceError(
@@ -389,7 +390,7 @@ class MCPServerHttpBase(AbstractMCPServer):
                     f"'{query}' failed with network error: {type(e).__name__} - {e}"
                 )
                 if attempt < max_retries:
-                    self.logger.info(f"{error_message}. Will retry.")
+                    self.logger.warning(f"{error_message}. Will retry.")
                     continue
                 else:
                     self.logger.error(
@@ -453,7 +454,7 @@ class MCPServerHttpBase(AbstractMCPServer):
 
                     await asyncio.sleep(actual_delay)
 
-                self.logger.debug(
+                self.logger.info(
                     f"Querying (Attempt {attempt + 1}): {endpoint} with params {payload}"
                 )
                 response = await self.http_client.post(endpoint, json=payload)
@@ -510,7 +511,7 @@ class MCPServerHttpBase(AbstractMCPServer):
                 if (
                     e.response.status_code == 429 and attempt < max_retries
                 ):  # Too Many Requests
-                    self.logger.info("Returned 429. Will retry.")
+                    self.logger.warning("Returned 429. Will retry.")
                     continue
                 else:
                     raise MCPUpstreamServiceError(

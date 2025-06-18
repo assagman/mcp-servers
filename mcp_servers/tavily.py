@@ -117,7 +117,7 @@ class TavilyServerSettings(MCPServerHttpBaseSettings):
     PORT: int = Field(
         default=8768, validation_alias=AliasChoices("MCP_SERVER_TAVILY_PORT")
     )
-    RATE_LIMIT_PER_SECOND: int = Field(
+    RATE_LIMIT_PER_SECOND: Optional[int] = Field(
         default=20,
         validation_alias=AliasChoices(
             "TAVILY_RATE_LIMIT_PER_SECOND", "MCP_SERVER_TAVILY_RATE_LIMIT_PER_SECOND"
@@ -230,7 +230,7 @@ class MCPServerTavily(MCPServerHttpBase):
             extract_result_parse_err_msg = (
                 f"Error while parsing extraction results: {exp}"
             )
-            self.logger.info(extract_result_parse_err_msg)
+            self.logger.error(extract_result_parse_err_msg)
             return extract_result_parse_err_msg
 
         return "\n".join(output_parts)
@@ -282,7 +282,7 @@ class MCPServerTavily(MCPServerHttpBase):
             Returns:
                 str: Formatted search results or an error message.
             """
-            self.logger.debug(
+            self.logger.info(
                 f"Tavily search tool called with query: {query}, depth: {search_depth}"
             )
             if not isinstance(query, str) or not query.strip():
@@ -327,7 +327,7 @@ class MCPServerTavily(MCPServerHttpBase):
                     self.TAVILY_ENDPOINT, payload
                 )
                 validated_response = TavilyApiResponse.model_validate(response_dict)
-                self.logger.debug(
+                self.logger.info(
                     f"Tavily search tool returned result for query: {query}"
                 )
                 return self._format_search_results(validated_response)
@@ -354,7 +354,7 @@ class MCPServerTavily(MCPServerHttpBase):
             Returns:
                 str: The extracted textual content of the webpage, or an error message.
             """
-            self.logger.debug(
+            self.logger.info(
                 f"Tavily extract content tool called for URL: {url_to_extract}"
             )
             try:
@@ -386,7 +386,7 @@ class MCPServerTavily(MCPServerHttpBase):
                 validated_response = TavilyExtractApiResponse.model_validate(
                     response_dict
                 )
-                self.logger.debug(
+                self.logger.info(
                     f"Tavily extract content tool returned result for URL: {url_to_extract}"
                 )
                 return self._format_extract_results(validated_response)
@@ -434,7 +434,7 @@ class MCPServerTavily(MCPServerHttpBase):
             Returns:
                 str: Formatted crawled content or an error message.
             """
-            self.logger.debug(
+            self.logger.info(
                 f"Tavily crawl URL tool called for URL: {url_to_crawl}, max_depth: {max_depth}"
             )
             if not isinstance(url_to_crawl, str) or not url_to_crawl.strip():
@@ -497,7 +497,7 @@ class MCPServerTavily(MCPServerHttpBase):
                 validated_response = TavilyCrawlApiResponse.model_validate(
                     response_dict
                 )
-                self.logger.debug(
+                self.logger.info(
                     f"Tavily crawl URL tool returned result for URL: {url_to_crawl}"
                 )
                 return self._format_crawl_results(validated_response)

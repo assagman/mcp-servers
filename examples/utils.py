@@ -1,7 +1,7 @@
 from pydantic_ai.agent import Agent
 
 
-DEFAULT_MODEL_NAME = "google/gemini-2.5-flash"
+DEFAULT_MODEL_NAME = "google/gemini-2.0-flash-001"
 
 
 async def chatify(agent: Agent):

@@ -24,8 +24,8 @@ from mcp_servers import DEFAULT_ENV_FILE
 class MCPServer(FastMCP):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.server: Optional[Server] = None
-        self.server_task: Optional[Task] = None
+        self.server: Server
+        self.server_task: Task
 
     async def run_streamable_http_async(self) -> None:
         """Run the server using StreamableHTTP transport."""

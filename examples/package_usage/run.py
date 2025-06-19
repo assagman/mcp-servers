@@ -42,6 +42,7 @@ async def main():
         model=f"openrouter:{DEFAULT_MODEL_NAME}",
         mcp_servers=mcp_servers_streamable_https,
         system_prompt=system_prompt,
+        model_settings={"max_tokens": 5_000},
     )
 
     async with agent.run_mcp_servers():

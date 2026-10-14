@@ -1,5 +1,10 @@
 # mcp-servers
 
+> [!WARNING]
+> **Deprecated and unmaintained.** This project gets no more updates, fixes, or security patches.
+> The repository is archived and the `mcp-servers` package on PyPI is archived.
+> Do not use it in new projects. Its dependencies can contain known vulnerabilities.
+
 A Python package providing a collection of Model-Control-Protocol (MCP) servers and a CLI tool to manage them efficiently.
 
 ## Disclaimer
